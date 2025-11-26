@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Compass Prototype</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #222;
+            color: #fff;
+            user-select: none;
+            /* Prevents text selection while clutching */
+        }
+
+        #status {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+
+        #sector-display {
+            font-size: 4rem;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        #btn-start {
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .instruction {
+            font-size: 0.9rem;
+            color: #aaa;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <button id="btn-start">Start / Request Permissions</button>
+
+    <div id="ui-container" style="display:none; text-align:center;">
+        <div id="status">Clutch Disengaged (Paused)</div>
+        <div>Current Sector:</div>
+        <div id="sector-display">-</div>
+        <p class="instruction">Press and HOLD screen to rotate compass.</p>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

@@ -1,26 +1,27 @@
 // --- STATE MANAGEMENT ---
 const state = {
-    isClutched: false,      // Task 2: Clutch mechanism
-    rawAlpha: 0,            // Raw compass heading (0-360)
-    calibratedOffset: 0,    // Reference point for "North" (Task 1 Refinement)
-    currentSector: -1,      // Task 3: 0-7
+    isClutched: false,
+    rawAlpha: 0,
+    calibratedOffset: 0,
+    currentSector: -1,
     sectorCount: 8,
     audioContext: null,
-    activeOscillator: null, // The currently playing sound source
-    isAudioInitialized: false
+    activeOscillator: null,
+    isAudioInitialized: false,
+    lastInteractionTime: 0
 };
 
 // --- CONFIGURATION ---
-// 8 distinct "Musicons" using simple oscillators (Task 5)
+// Task 5: Oscillator configurations
 const SECTOR_SOUNDS = [
-    { type: 'sawtooth', freq: 110 }, // Sector 0 (North) - Low Buzz
-    { type: 'sine',     freq: 261 }, // Sector 1 (NE)    - C4
-    { type: 'square',   freq: 293 }, // Sector 2 (East)  - D4
-    { type: 'triangle', freq: 329 }, // Sector 3 (SE)    - E4
-    { type: 'sawtooth', freq: 392 }, // Sector 4 (South) - G4
-    { type: 'sine',     freq: 440 }, // Sector 5 (SW)    - A4
-    { type: 'square',   freq: 493 }, // Sector 6 (West)  - B4
-    { type: 'triangle', freq: 523 }  // Sector 7 (NW)    - C5
+    { type: 'sawtooth', freq: 110 }, // Sector 0 (Rock)
+    { type: 'sine',     freq: 261 }, // Sector 1 (Pop)
+    { type: 'square',   freq: 293 }, // Sector 2 (HipHop)
+    { type: 'triangle', freq: 329 }, // Sector 3 (Jazz)
+    { type: 'sawtooth', freq: 392 }, // Sector 4 (Classical)
+    { type: 'sine',     freq: 440 }, // Sector 5 (Metal)
+    { type: 'square',   freq: 493 }, // Sector 6 (Electronic)
+    { type: 'triangle', freq: 523 }  // Sector 7 (Folk)
 ];
 
 // --- DOM ELEMENTS ---
@@ -31,26 +32,16 @@ const sectorDiv = document.getElementById('sector-display');
 
 // --- INITIALIZATION ---
 startBtn.addEventListener('click', async () => {
-    // 1. Initialize Audio Context (Must be done on user gesture)
     initAudio();
-
-    // 2. Request Sensors (iOS 13+ requirement, ignored by Android/Firefox usually)
+    // iOS Permission Request (Safe to keep for compatibility)
     if (typeof DeviceOrientationEvent !== 'undefined' && 
         typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
             const permission = await DeviceOrientationEvent.requestPermission();
-            if (permission === 'granted') {
-                initApp();
-            } else {
-                alert("Permission denied. Compass won't work.");
-            }
-        } catch (error) {
-            console.error(error);
-            // Fallback if requestPermission fails but API exists
-            initApp(); 
-        }
+            if (permission === 'granted') initApp();
+            else alert("Permission denied.");
+        } catch (error) { initApp(); }
     } else {
-        // Android / Firefox / Non-iOS
         initApp();
     }
 });
@@ -59,68 +50,56 @@ function initApp() {
     startBtn.style.display = 'none';
     uiContainer.style.display = 'block';
     
-    // Listen for device orientation (Task 1)
     window.addEventListener('deviceorientation', handleOrientation);
     
-    // Setup Clutch Listeners (Task 2)
+    // Using passive: false to prevent scrolling/zooming while clutching
     window.addEventListener('touchstart', engageClutch, {passive: false});
     window.addEventListener('touchend', disengageClutch);
     window.addEventListener('mousedown', engageClutch);
     window.addEventListener('mouseup', disengageClutch);
-
-    // Setup Selection Listener (Task 6)
-    // We bind a click to the window to detect "taps"
+    
+    // Selection listener
     window.addEventListener('click', handleSelectionClick);
 }
 
-// --- AUDIO ENGINE (Tasks 4 & 5) ---
+// --- AUDIO ENGINE ---
 function initAudio() {
     if (state.isAudioInitialized) return;
-
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     state.audioContext = new AudioContext();
-    
-    // Resume context if suspended (browser policy)
-    if (state.audioContext.state === 'suspended') {
-        state.audioContext.resume();
-    }
-    
+    if (state.audioContext.state === 'suspended') state.audioContext.resume();
     state.isAudioInitialized = true;
-    console.log("Audio Engine Initialized");
 }
 
 function playSectorSound(sectorIndex) {
     if (!state.audioContext) return;
-
-    // Stop any currently playing sound first (Sequential Mode)
-    stopSound();
+    stopSound(); // Sequential Mode: stop previous first
 
     const soundConfig = SECTOR_SOUNDS[sectorIndex];
     const ctx = state.audioContext;
 
-    // 1. Create Oscillator (Source)
     const osc = ctx.createOscillator();
     osc.type = soundConfig.type;
     osc.frequency.setValueAtTime(soundConfig.freq, ctx.currentTime);
 
-    // 2. Create Panner (Spatialization)
     const panner = ctx.createPanner();
     panner.panningModel = 'HRTF';
     panner.distanceModel = 'inverse';
+    panner.refDistance = 1;
+    panner.maxDistance = 10000;
     
-    // Calculate Position of this Sector's "Speaker" in 3D space
+    // FIX: Ensure sectors are positioned logically clockwise
+    // Sector 0 = North (0,0,-1)
+    // Sector 2 = East (1,0,0)
     const angleRad = (sectorIndex * 45) * (Math.PI / 180);
-    // Convert polar to cartesian (Web Audio: +X is Right, -Z is Front)
     const x = Math.sin(angleRad) * 2;
     const z = -Math.cos(angleRad) * 2;
     panner.setPosition(x, 0, z);
 
-    // 3. Create Gain (Volume Control)
     const gainNode = ctx.createGain();
     gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.1); // Fade in
+    gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.1);
 
-    // 4. Connect Graph
     osc.connect(panner);
     panner.connect(gainNode);
     gainNode.connect(ctx.destination);
@@ -132,8 +111,8 @@ function playSectorSound(sectorIndex) {
 function stopSound() {
     if (state.activeOscillator) {
         const { node, gain } = state.activeOscillator;
-        // Fade out to avoid "pop"
         const now = state.audioContext.currentTime;
+        gain.gain.cancelScheduledValues(now);
         gain.gain.setValueAtTime(gain.gain.value, now);
         gain.gain.linearRampToValueAtTime(0, now + 0.1);
         node.stop(now + 0.1);
@@ -148,11 +127,10 @@ function playConfirmationSound() {
     const gain = ctx.createGain();
     
     osc.type = 'sine';
-    // High pitch "Ding"
     osc.frequency.setValueAtTime(880, ctx.currentTime); 
     osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
     
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.setValueAtTime(0.5, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
     
     osc.connect(gain);
@@ -161,119 +139,119 @@ function playConfirmationSound() {
     osc.stop(ctx.currentTime + 0.3);
 }
 
-function updateListenerOrientation(alphaDeg) {
-    if (!state.audioContext) return;
-    
-    // Convert compass angle (0=North, 90=East) to Web Audio Forward Vector
-    // NOTE: This assumes calibrated "North" is -Z
-    const rad = alphaDeg * (Math.PI / 180);
-    const x = Math.sin(rad);
-    const z = -Math.cos(rad);
-
-    const listener = state.audioContext.listener;
-    
-    if (listener.forwardX) {
-        listener.forwardX.value = x;
-        listener.forwardY.value = 0;
-        listener.forwardZ.value = z;
-        listener.upX.value = 0;
-        listener.upY.value = 1;
-        listener.upZ.value = 0;
-    } else {
-        listener.setOrientation(x, 0, z, 0, 1, 0);
-    }
-}
-
 // --- INTERACTION LOGIC ---
 
 function handleOrientation(event) {
     if (event.alpha === null) return;
     
-    // Normalize absolute alpha
-    let angle = event.alpha; 
+    // FIX 1: INVERT ROTATION
+    // If rotating right counted down (7,6,5), we invert the input angle.
+    // 360 - event.alpha makes clockwise rotation increase the value.
+    let angle = 360 - event.alpha; 
     
-    // Update the Audio Listener's head position continuously
+    // Normalize to 0-360
+    angle = angle % 360;
+    if (angle < 0) angle += 360;
+
     if (state.isClutched) {
         state.rawAlpha = angle;
-        updateListenerOrientation(angle - state.calibratedOffset);
+        // Update listener to match the inverted logic
+        updateListener(angle - state.calibratedOffset);
         calculateSector(angle);
     }
 }
 
+function updateListener(relativeAngle) {
+    if (!state.audioContext) return;
+    const rad = relativeAngle * (Math.PI / 180);
+    // Listener faces the relative angle
+    const x = Math.sin(rad);
+    const z = -Math.cos(rad);
+    
+    const listener = state.audioContext.listener;
+    if (listener.forwardX) {
+        listener.forwardX.value = x;
+        listener.forwardZ.value = z;
+        listener.upY.value = 1;
+    } else {
+        listener.setOrientation(x, 0, z, 0, 1, 0);
+    }
+}
+
 function engageClutch(e) {
-    // If it's a touch event, prevent default scrolling
     if (e.cancelable) e.preventDefault(); 
     
-    // On the very first clutch, define "Forward" as current facing (Task 1 Calibration)
+    // Calibration on first touch
+    // This sets "Forward" to wherever you are currently facing
     if (state.calibratedOffset === 0 && state.rawAlpha !== 0) {
         state.calibratedOffset = state.rawAlpha;
-        console.log("Calibrated Forward to: " + state.calibratedOffset);
     }
 
-    // Ensure Audio Context is running
     if (state.audioContext && state.audioContext.state === 'suspended') {
         state.audioContext.resume();
     }
 
     state.isClutched = true;
-    statusDiv.textContent = "Clutch ENGAGED (Tracking)";
+    statusDiv.textContent = "Clutch ENGAGED (Browsing)";
     statusDiv.style.color = "#4CAF50";
     
-    // Play sound for current sector immediately
     calculateSector(state.rawAlpha, true);
 }
 
 function disengageClutch(e) {
     state.isClutched = false;
-    statusDiv.textContent = "Clutch DISENGAGED (Paused)";
-    statusDiv.style.color = "#fff";
+    // Don't change text immediately to "Paused" if we just selected
+    // We let the selection logic handle text if it was a tap
+    setTimeout(() => {
+        // Only show "Paused" if we haven't just triggered a selection
+        if (!statusDiv.textContent.includes("SELECTED")) {
+            statusDiv.textContent = "Clutch DISENGAGED (Paused)";
+            statusDiv.style.color = "#fff";
+        }
+    }, 50); // Short delay to allow click event to process first
     
-    // Stop sound when not interacting (Task 5 requirement)
     stopSound();
 }
 
 function handleSelectionClick(e) {
-    // Task 6: Selection Logic
-    // If we are NOT clutched (finger up) and have a valid sector, select it.
-    // This allows "Lift and Tap" interaction.
+    // Logic: If we are NOT holding the screen (isClutched = false)
+    // AND we have a valid sector selected, confirm it.
     if (!state.isClutched && state.currentSector !== -1) {
         confirmSelection(state.currentSector);
     }
 }
 
 function confirmSelection(sector) {
-    // Task 6 Feedback: Visual, Haptic, Audio
     statusDiv.textContent = `SELECTED: Sector ${sector}`;
-    statusDiv.style.color = "cyan";
+    statusDiv.style.color = "cyan"; // Bright feedback
     
-    // Haptic: Double Buzz
+    // Feedback
     if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-
-    // Audio: Ding
     playConfirmationSound();
     
-    console.log(`User confirmed selection of Sector ${sector}`);
+    console.log(`Selection Confirmed: ${sector}`);
 }
 
 function calculateSector(angle, forcePlay = false) {
-    // 1. Apply Calibration Offset
+    // 1. Apply Calibration
     let calibratedAngle = angle - state.calibratedOffset;
     
-    // 2. Normalize to 0-360
+    // 2. Normalize 0-360
     while (calibratedAngle < 0) calibratedAngle += 360;
     while (calibratedAngle >= 360) calibratedAngle -= 360;
 
-    // 3. Map to 0-7
-    let sector = Math.floor(calibratedAngle / 45) % 8;
+    // FIX 2: CENTERING SECTORS
+    // Sector 0 is 45deg wide. We want "Forward" (0deg) to be the CENTER.
+    // So Sector 0 should span from -22.5 to +22.5.
+    // We shift the angle by +22.5 before dividing.
+    // effectively: floor((angle + 22.5) / 45)
+    let sector = Math.floor((calibratedAngle + 22.5) / 45) % 8;
     
     if (sector !== state.currentSector || forcePlay) {
         state.currentSector = sector;
         updateUI();
         
-        // Haptic "Click" on boundary crossing (Task 9 - Early Bonus)
-        if (navigator.vibrate) navigator.vibrate(15);
-
-        // Play the new sector's sound
+        if (navigator.vibrate) navigator.vibrate(15); // Light tick
         playSectorSound(sector);
     }
 }

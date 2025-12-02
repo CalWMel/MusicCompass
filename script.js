@@ -279,6 +279,6 @@ function calculateSector(angle, forcePlay = false) {
 }
 
 function updateUI() {
-    const genreNames = ["Rock (Low)", "Pop", "HipHop", "Jazz", "Classical", "Metal", "Electronic", "Folk (High)"];
+    const genreNames = ["Rock", "Pop", "HipHop", "Jazz", "Classical", "Metal", "Electronic", "Folk"];
     sectorDiv.textContent = `${state.currentSector} (${genreNames[state.currentSector]})`;
 }

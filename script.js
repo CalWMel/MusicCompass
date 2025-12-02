@@ -8,11 +8,11 @@ const state = {
     audioContext: null,
     activeOscillator: null,
     isAudioInitialized: false,
-    lastInteractionTime: 0
+    // NEW: Interaction Timing
+    touchStartTime: 0
 };
 
 // --- CONFIGURATION ---
-// Task 5: Oscillator configurations
 const SECTOR_SOUNDS = [
     { type: 'sawtooth', freq: 110 }, // Sector 0 (Rock)
     { type: 'sine',     freq: 261 }, // Sector 1 (Pop)
@@ -33,7 +33,6 @@ const sectorDiv = document.getElementById('sector-display');
 // --- INITIALIZATION ---
 startBtn.addEventListener('click', async () => {
     initAudio();
-    // iOS Permission Request (Safe to keep for compatibility)
     if (typeof DeviceOrientationEvent !== 'undefined' && 
         typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
@@ -52,14 +51,17 @@ function initApp() {
     
     window.addEventListener('deviceorientation', handleOrientation);
     
-    // Using passive: false to prevent scrolling/zooming while clutching
-    window.addEventListener('touchstart', engageClutch, {passive: false});
-    window.addEventListener('touchend', disengageClutch);
-    window.addEventListener('mousedown', engageClutch);
-    window.addEventListener('mouseup', disengageClutch);
+    // Unified Touch/Mouse Handlers
+    // We strictly control the events to avoid conflicts
+    const engage = (e) => engageClutch(e);
+    const disengage = (e) => disengageClutch(e);
+
+    window.addEventListener('touchstart', engage, {passive: false});
+    window.addEventListener('touchend', disengage);
     
-    // Selection listener
-    window.addEventListener('click', handleSelectionClick);
+    // Mouse fallbacks for testing on PC
+    window.addEventListener('mousedown', engage);
+    window.addEventListener('mouseup', disengage);
 }
 
 // --- AUDIO ENGINE ---
@@ -73,7 +75,10 @@ function initAudio() {
 
 function playSectorSound(sectorIndex) {
     if (!state.audioContext) return;
-    stopSound(); // Sequential Mode: stop previous first
+    // Don't restart the sound if it's already playing for this sector
+    // This reduces "stutter" if the sensor flickers slightly
+    // but for now, we stick to the simple sequential logic
+    stopSound(); 
 
     const soundConfig = SECTOR_SOUNDS[sectorIndex];
     const ctx = state.audioContext;
@@ -87,10 +92,9 @@ function playSectorSound(sectorIndex) {
     panner.distanceModel = 'inverse';
     panner.refDistance = 1;
     panner.maxDistance = 10000;
+    panner.coneInnerAngle = 360; // Omnidirectional sound for now
     
-    // FIX: Ensure sectors are positioned logically clockwise
-    // Sector 0 = North (0,0,-1)
-    // Sector 2 = East (1,0,0)
+    // Position logic
     const angleRad = (sectorIndex * 45) * (Math.PI / 180);
     const x = Math.sin(angleRad) * 2;
     const z = -Math.cos(angleRad) * 2;
@@ -98,7 +102,7 @@ function playSectorSound(sectorIndex) {
 
     const gainNode = ctx.createGain();
     gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.1);
+    gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05); // Faster attack
 
     osc.connect(panner);
     panner.connect(gainNode);
@@ -114,8 +118,8 @@ function stopSound() {
         const now = state.audioContext.currentTime;
         gain.gain.cancelScheduledValues(now);
         gain.gain.setValueAtTime(gain.gain.value, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.1);
-        node.stop(now + 0.1);
+        gain.gain.linearRampToValueAtTime(0, now + 0.05); // Fast release
+        node.stop(now + 0.05);
         state.activeOscillator = null;
     }
 }
@@ -144,18 +148,14 @@ function playConfirmationSound() {
 function handleOrientation(event) {
     if (event.alpha === null) return;
     
-    // FIX 1: INVERT ROTATION
-    // If rotating right counted down (7,6,5), we invert the input angle.
-    // 360 - event.alpha makes clockwise rotation increase the value.
+    // Invert Rotation: 360 - alpha
     let angle = 360 - event.alpha; 
     
-    // Normalize to 0-360
     angle = angle % 360;
     if (angle < 0) angle += 360;
 
     if (state.isClutched) {
         state.rawAlpha = angle;
-        // Update listener to match the inverted logic
         updateListener(angle - state.calibratedOffset);
         calculateSector(angle);
     }
@@ -164,7 +164,6 @@ function handleOrientation(event) {
 function updateListener(relativeAngle) {
     if (!state.audioContext) return;
     const rad = relativeAngle * (Math.PI / 180);
-    // Listener faces the relative angle
     const x = Math.sin(rad);
     const z = -Math.cos(rad);
     
@@ -179,10 +178,12 @@ function updateListener(relativeAngle) {
 }
 
 function engageClutch(e) {
-    if (e.cancelable) e.preventDefault(); 
+    if (e.cancelable) e.preventDefault(); // Prevents scroll & system click
     
-    // Calibration on first touch
-    // This sets "Forward" to wherever you are currently facing
+    // 1. Record start time
+    state.touchStartTime = Date.now();
+
+    // 2. Calibration (First time only)
     if (state.calibratedOffset === 0 && state.rawAlpha !== 0) {
         state.calibratedOffset = state.rawAlpha;
     }
@@ -191,6 +192,7 @@ function engageClutch(e) {
         state.audioContext.resume();
     }
 
+    // 3. Start Browsing
     state.isClutched = true;
     statusDiv.textContent = "Clutch ENGAGED (Browsing)";
     statusDiv.style.color = "#4CAF50";
@@ -200,33 +202,34 @@ function engageClutch(e) {
 
 function disengageClutch(e) {
     state.isClutched = false;
-    // Don't change text immediately to "Paused" if we just selected
-    // We let the selection logic handle text if it was a tap
-    setTimeout(() => {
-        // Only show "Paused" if we haven't just triggered a selection
-        if (!statusDiv.textContent.includes("SELECTED")) {
-            statusDiv.textContent = "Clutch DISENGAGED (Paused)";
-            statusDiv.style.color = "#fff";
-        }
-    }, 50); // Short delay to allow click event to process first
     
-    stopSound();
-}
+    // 1. Calculate how long the user held the screen
+    const touchDuration = Date.now() - state.touchStartTime;
+    const TAP_THRESHOLD = 250; // ms
 
-function handleSelectionClick(e) {
-    // Logic: If we are NOT holding the screen (isClutched = false)
-    // AND we have a valid sector selected, confirm it.
-    if (!state.isClutched && state.currentSector !== -1) {
-        confirmSelection(state.currentSector);
+    if (touchDuration < TAP_THRESHOLD) {
+        // --- IT WAS A TAP (SELECT) ---
+        stopSound(); // Cut the browsing sound
+        if (state.currentSector !== -1) {
+            confirmSelection(state.currentSector);
+        }
+    } else {
+        // --- IT WAS A HOLD (STOP BROWSING) ---
+        statusDiv.textContent = "Clutch DISENGAGED (Paused)";
+        statusDiv.style.color = "#fff";
+        stopSound();
     }
 }
 
 function confirmSelection(sector) {
+    // Visual Feedback
     statusDiv.textContent = `SELECTED: Sector ${sector}`;
-    statusDiv.style.color = "cyan"; // Bright feedback
+    statusDiv.style.color = "cyan";
     
-    // Feedback
+    // Haptic Feedback
     if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+    
+    // Audio Feedback
     playConfirmationSound();
     
     console.log(`Selection Confirmed: ${sector}`);
@@ -236,22 +239,18 @@ function calculateSector(angle, forcePlay = false) {
     // 1. Apply Calibration
     let calibratedAngle = angle - state.calibratedOffset;
     
-    // 2. Normalize 0-360
+    // 2. Normalize
     while (calibratedAngle < 0) calibratedAngle += 360;
     while (calibratedAngle >= 360) calibratedAngle -= 360;
 
-    // FIX 2: CENTERING SECTORS
-    // Sector 0 is 45deg wide. We want "Forward" (0deg) to be the CENTER.
-    // So Sector 0 should span from -22.5 to +22.5.
-    // We shift the angle by +22.5 before dividing.
-    // effectively: floor((angle + 22.5) / 45)
+    // 3. Center the sector (Offset by +22.5 deg)
     let sector = Math.floor((calibratedAngle + 22.5) / 45) % 8;
     
     if (sector !== state.currentSector || forcePlay) {
         state.currentSector = sector;
         updateUI();
         
-        if (navigator.vibrate) navigator.vibrate(15); // Light tick
+        if (navigator.vibrate) navigator.vibrate(15);
         playSectorSound(sector);
     }
 }

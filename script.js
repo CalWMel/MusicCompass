@@ -1,31 +1,40 @@
+// --- CONFIGURATION ---
+const SECTOR_COUNT = 8;
+const SECTOR_SIZE = 360 / SECTOR_COUNT; // 45 degrees
+const HYSTERESIS_THRESHOLD = 8; // Degrees of "stickiness" to prevent jitter
+
+// Your specific filenames
+const AUDIO_FILES = [
+    'assets/rock.mp3',       // Sector 0
+    'assets/pop.mp3',        // Sector 1
+    'assets/hiphop.mp3',     // Sector 2
+    'assets/jazz.mp3',       // Sector 3
+    'assets/classical.mp3',  // Sector 4
+    'assets/metal.mp3',      // Sector 5
+    'assets/electronic.mp3', // Sector 6
+    'assets/folk.mp3'        // Sector 7
+];
+const SELECT_SOUND_FILE = 'assets/select.mp3';
+
 // --- STATE MANAGEMENT ---
 const state = {
-    isClutched: false,
-    rawAlpha: 0,
-    calibratedOffset: 0,
-    currentSector: -1,
-    sectorCount: 8,
     audioContext: null,
-    activeOscillator: null,
+    audioBuffers: [],
+    selectBuffer: null,
     isAudioInitialized: false,
-    // NEW: Interaction Timing
-    touchStartTime: 0
+    
+    isClutched: false,
+    currentSector: -1,
+    
+    // NEW: Calibration State
+    hasCalibrated: false,   // Have we set the "Front" yet?
+    lastRawAngle: 0,        // Always tracks phone angle (even when paused)
+    calibratedOffset: 0,    // The angle we treat as "North" (Sector 0)
+    
+    touchStartTime: 0,
+    activeSource: null,
+    activeGain: null
 };
-
-// --- CONFIGURATION ---
-// Map sector indices to file paths
-const AUDIO_FILES = [
-    'assets/rock.mp3', // Rock
-    'assets/pop.mp3', // Pop
-    'assets/hiphop.mp3', // HipHop
-    'assets/jazz.mp3', // Jazz
-    'assets/classical.mp3', // Classical
-    'assets/metal.mp3', // Metal
-    'assets/electronic.mp3', // Electronic
-    'assets/folk.mp3'  // Folk
-];
-
-const audioBuffers = []; // We will store loaded sounds here
 
 // --- DOM ELEMENTS ---
 const startBtn = document.getElementById('btn-start');
@@ -35,15 +44,29 @@ const sectorDiv = document.getElementById('sector-display');
 
 // --- INITIALIZATION ---
 startBtn.addEventListener('click', async () => {
-    initAudio();
+    console.log("Start button clicked");
+    
+    // Initialize Audio (User Gesture Required)
+    await initAudio();
+    
+    // Request Sensors (iOS/Android specific)
     if (typeof DeviceOrientationEvent !== 'undefined' && 
         typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
             const permission = await DeviceOrientationEvent.requestPermission();
-            if (permission === 'granted') initApp();
-            else alert("Permission denied.");
-        } catch (error) { initApp(); }
+            if (permission === 'granted') {
+                initApp();
+            } else {
+                alert("Permission denied. The app needs orientation sensors.");
+            }
+        } catch (error) {
+            console.error(error);
+            // On some Android devices, requestPermission exists but throws error
+            // We try to init anyway.
+            initApp();
+        }
     } else {
+        // Non-iOS devices (Standard Android)
         initApp();
     }
 });
@@ -54,15 +77,14 @@ function initApp() {
     
     window.addEventListener('deviceorientation', handleOrientation);
     
-    // Unified Touch/Mouse Handlers
-    // We strictly control the events to avoid conflicts
+    // Touch Handlers
     const engage = (e) => engageClutch(e);
     const disengage = (e) => disengageClutch(e);
 
     window.addEventListener('touchstart', engage, {passive: false});
     window.addEventListener('touchend', disengage);
     
-    // Mouse fallbacks for testing on PC
+    // Mouse fallbacks for PC testing
     window.addEventListener('mousedown', engage);
     window.addEventListener('mouseup', disengage);
 }
@@ -70,128 +92,153 @@ function initApp() {
 // --- AUDIO ENGINE ---
 async function initAudio() {
     if (state.isAudioInitialized) return;
-    
+
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    state.audioContext = new AudioContext({ latencyHint: 'interactive' }); // Optimize for latency
+    state.audioContext = new AudioContext({ latencyHint: 'interactive' });
     
     if (state.audioContext.state === 'suspended') state.audioContext.resume();
     
-    // Pre-load all audio files
     statusDiv.textContent = "Loading Audio...";
+    
     try {
         await loadAllBuffers();
-        statusDiv.textContent = "Audio Loaded. Ready.";
+        statusDiv.textContent = "Audio Ready. Hold screen to explore.";
         state.isAudioInitialized = true;
     } catch (e) {
-        statusDiv.textContent = "Error loading audio.";
-        console.error(e);
+        statusDiv.textContent = "Error loading audio. Check console.";
+        console.error("Audio Load Error:", e);
     }
 }
 
 async function loadAllBuffers() {
-    const promises = AUDIO_FILES.map(async (url, index) => {
-        const response = await fetch(url);
-        const arrayBuffer = await response.arrayBuffer();
-        const audioBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
-        audioBuffers[index] = audioBuffer;
+    // Load Genre Sounds
+    const genrePromises = AUDIO_FILES.map(async (url, index) => {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Failed to load ${url}`);
+            const arrayBuffer = await response.arrayBuffer();
+            state.audioBuffers[index] = await state.audioContext.decodeAudioData(arrayBuffer);
+        } catch (err) {
+            console.error(err);
+        }
     });
-    await Promise.all(promises);
+
+    // Load Selection Sound
+    const selectPromise = (async () => {
+        try {
+            const response = await fetch(SELECT_SOUND_FILE);
+            if (!response.ok) throw new Error(`Failed to load ${SELECT_SOUND_FILE}`);
+            const arrayBuffer = await response.arrayBuffer();
+            state.selectBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
+        } catch (err) {
+            console.error("Select sound missing", err);
+        }
+    })();
+
+    await Promise.all([...genrePromises, selectPromise]);
 }
 
 function playSectorSound(sectorIndex) {
-    if (!state.audioContext || !audioBuffers[sectorIndex]) return;
+    if (!state.audioContext || !state.audioBuffers[sectorIndex]) return;
 
-    stopSound(); // Ensure overlap doesn't get messy (Sequential Mode)
+    // --- FIX: Removed the "Safety Check" that was blocking the sound ---
+    // The setSector function guarantees we only get here if the sector changed.
+    
+    stopSound(); // Crossfade out old sound
 
     const ctx = state.audioContext;
-    
-    // Create Source from Buffer
     const source = ctx.createBufferSource();
-    source.buffer = audioBuffers[sectorIndex];
-    source.loop = true; // Loop the musicon while hovering
+    source.buffer = state.audioBuffers[sectorIndex];
+    source.loop = true;
 
-    // Create Panner (HRTF)
+    // Spatial Audio (HRTF)
     const panner = ctx.createPanner();
     panner.panningModel = 'HRTF';
     panner.distanceModel = 'inverse';
-    panner.refDistance = 1;
-    panner.maxDistance = 10000;
-    panner.coneInnerAngle = 360;
-
-    // Position logic (Same as before)
-    const angleRad = (sectorIndex * 45) * (Math.PI / 180);
-    const x = Math.sin(angleRad) * 2;
-    const z = -Math.cos(angleRad) * 2;
+    
+    // Position sound based on sector (0 = North, 2 = East, etc.)
+    const angleRad = (sectorIndex * SECTOR_SIZE) * (Math.PI / 180);
+    const x = Math.sin(angleRad) * 3;
+    const z = -Math.cos(angleRad) * 3;
     panner.setPosition(x, 0, z);
 
-    // Gain for Fade In/Out
+    // Fade In
     const gainNode = ctx.createGain();
     gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.1); // 100ms Fade in
+    gainNode.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.1);
 
-    // Connect Graph
     source.connect(panner);
     panner.connect(gainNode);
     gainNode.connect(ctx.destination);
-
+    
     source.start();
     
-    // Store active node to stop it later
-    state.activeOscillator = { node: source, gain: gainNode };
+    state.activeSource = source;
+    state.activeGain = gainNode;
 }
 
 function stopSound() {
-    if (state.activeOscillator) {
-        const { node, gain } = state.activeOscillator;
-        const now = state.audioContext.currentTime;
-        gain.gain.cancelScheduledValues(now);
-        gain.gain.setValueAtTime(gain.gain.value, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.05); // Fast release
-        node.stop(now + 0.05);
-        state.activeOscillator = null;
+    if (state.activeSource) {
+        const oldSource = state.activeSource;
+        const oldGain = state.activeGain;
+        const ctx = state.audioContext;
+        
+        // Fade out
+        oldGain.gain.cancelScheduledValues(ctx.currentTime);
+        oldGain.gain.setValueAtTime(oldGain.gain.value, ctx.currentTime);
+        oldGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
+        
+        setTimeout(() => { oldSource.stop(); oldSource.disconnect(); }, 150);
+        
+        state.activeSource = null;
+        state.activeGain = null;
     }
 }
 
 function playConfirmationSound() {
-    if (!state.audioContext) return;
+    if (!state.audioContext || !state.selectBuffer) return;
+    
     const ctx = state.audioContext;
-    const osc = ctx.createOscillator();
+    const source = ctx.createBufferSource();
+    source.buffer = state.selectBuffer;
+    
     const gain = ctx.createGain();
+    gain.gain.value = 0.5;
     
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime); 
-    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
-    
-    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-    
-    osc.connect(gain);
+    source.connect(gain);
     gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.3);
+    source.start();
 }
 
 // --- INTERACTION LOGIC ---
 
 function handleOrientation(event) {
-    if (event.alpha === null) return;
-    
-    // Invert Rotation: 360 - alpha
-    let angle = 360 - event.alpha; 
-    
+    let alpha = event.alpha;
+    if (alpha === null) return;
+
+    // 1. Always calculate raw angle (Inverted for natural feel)
+    let angle = 360 - alpha;
     angle = angle % 360;
     if (angle < 0) angle += 360;
 
-    if (state.isClutched) {
-        state.rawAlpha = angle;
-        updateListener(angle - state.calibratedOffset);
-        calculateSector(angle);
-    }
+    // Store it so we can calibrate instantly on touch
+    state.lastRawAngle = angle;
+
+    // 2. Only navigate if clutched
+    if (!state.isClutched) return;
+
+    // Apply Calibration
+    let calibratedAngle = angle - state.calibratedOffset;
+    if (calibratedAngle < 0) calibratedAngle += 360;
+    if (calibratedAngle >= 360) calibratedAngle -= 360;
+
+    updateListener(calibratedAngle);
+    calculateSector(calibratedAngle);
 }
 
-function updateListener(relativeAngle) {
+function updateListener(angle) {
     if (!state.audioContext) return;
-    const rad = relativeAngle * (Math.PI / 180);
+    const rad = angle * (Math.PI / 180);
     const x = Math.sin(rad);
     const z = -Math.cos(rad);
     
@@ -205,85 +252,95 @@ function updateListener(relativeAngle) {
     }
 }
 
-function engageClutch(e) {
-    if (e.cancelable) e.preventDefault(); // Prevents scroll & system click
+function calculateSector(angle) {
+    // 1. Determine "Raw" Sector (where we are currently pointing)
+    const rawSector = Math.floor(angle / SECTOR_SIZE) % SECTOR_COUNT;
     
-    // 1. Record start time
+    // 2. Initial state: Just take the raw sector
+    if (state.currentSector === -1) {
+        setSector(rawSector);
+        return;
+    }
+
+    // 3. Hysteresis: Only change if we are DEEP inside the new sector
+    // This prevents flickering at the edges
+    const currentCenter = state.currentSector * SECTOR_SIZE;
+    let diff = angle - currentCenter;
+    
+    // Wrap-around math
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+
+    // Threshold: We must go past the boundary by HYSTERESIS_THRESHOLD degrees
+    const boundary = (SECTOR_SIZE / 2) + HYSTERESIS_THRESHOLD;
+
+    if (Math.abs(diff) > boundary) {
+        setSector(rawSector);
+    }
+}
+
+function setSector(newSector) {
+    if (state.currentSector !== newSector) {
+        state.currentSector = newSector;
+        
+        // Visuals
+        const genreNames = ["Rock", "Pop", "HipHop", "Jazz", "Classical", "Metal", "Electronic", "Folk"];
+        sectorDiv.textContent = `${newSector} (${genreNames[newSector]})`;
+        
+        // Haptics
+        if (navigator.vibrate) navigator.vibrate(15);
+        
+        // Audio
+        playSectorSound(newSector);
+    }
+}
+
+function engageClutch(e) {
+    if (e.cancelable) e.preventDefault(); 
+    
     state.touchStartTime = Date.now();
 
-    // 2. Calibration (First time only)
-    if (state.calibratedOffset === 0 && state.rawAlpha !== 0) {
-        state.calibratedOffset = state.rawAlpha;
+    // FIX 2: Calibration (Fixes "HipHop is Front")
+    // If this is the first touch, set "Front" to be "Rock" (Sector 0)
+    if (!state.hasCalibrated) {
+        state.calibratedOffset = state.lastRawAngle;
+        state.hasCalibrated = true;
+        console.log("Calibrated North to: " + state.lastRawAngle);
     }
 
-    if (state.audioContext && state.audioContext.state === 'suspended') {
-        state.audioContext.resume();
-    }
-
-    // 3. Start Browsing
     state.isClutched = true;
-    statusDiv.textContent = "Clutch ENGAGED (Browsing)";
+    statusDiv.textContent = "Browsing...";
     statusDiv.style.color = "#4CAF50";
-    
-    calculateSector(state.rawAlpha, true);
+
+    // FIX 1: Resume Playback (Fixes "Silence on re-touch")
+    // If we are already in a sector (e.g., let go on Rock, pressed again on Rock),
+    // we must manually restart the sound because the sensor won't detect a "change."
+    if (state.currentSector !== -1) {
+        playSectorSound(state.currentSector);
+    }
 }
 
 function disengageClutch(e) {
     state.isClutched = false;
     
-    // 1. Calculate how long the user held the screen
     const touchDuration = Date.now() - state.touchStartTime;
-    const TAP_THRESHOLD = 250; // ms
+    const TAP_THRESHOLD = 250; 
 
     if (touchDuration < TAP_THRESHOLD) {
-        // --- IT WAS A TAP (SELECT) ---
-        stopSound(); // Cut the browsing sound
+        // --- TAP = SELECT ---
         if (state.currentSector !== -1) {
-            confirmSelection(state.currentSector);
+            stopSound(); // <--- ADD THIS LINE (Stops the genre loop)
+            
+            statusDiv.textContent = `Selected: ${state.currentSector}`;
+            statusDiv.style.color = "cyan";
+            
+            playConfirmationSound(); // Plays the "ding"
+            if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
         }
     } else {
-        // --- IT WAS A HOLD (STOP BROWSING) ---
-        statusDiv.textContent = "Clutch DISENGAGED (Paused)";
+        // --- HOLD RELEASE = PAUSE ---
+        statusDiv.textContent = "Paused";
         statusDiv.style.color = "#fff";
-        stopSound();
+        stopSound(); // This was already here
     }
-}
-
-function confirmSelection(sector) {
-    // Visual Feedback
-    statusDiv.textContent = `SELECTED: Sector ${sector}`;
-    statusDiv.style.color = "cyan";
-    
-    // Haptic Feedback
-    if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-    
-    // Audio Feedback
-    playConfirmationSound();
-    
-    console.log(`Selection Confirmed: ${sector}`);
-}
-
-function calculateSector(angle, forcePlay = false) {
-    // 1. Apply Calibration
-    let calibratedAngle = angle - state.calibratedOffset;
-    
-    // 2. Normalize
-    while (calibratedAngle < 0) calibratedAngle += 360;
-    while (calibratedAngle >= 360) calibratedAngle -= 360;
-
-    // 3. Center the sector (Offset by +22.5 deg)
-    let sector = Math.floor((calibratedAngle + 22.5) / 45) % 8;
-    
-    if (sector !== state.currentSector || forcePlay) {
-        state.currentSector = sector;
-        updateUI();
-        
-        if (navigator.vibrate) navigator.vibrate(15);
-        playSectorSound(sector);
-    }
-}
-
-function updateUI() {
-    const genreNames = ["Rock", "Pop", "HipHop", "Jazz", "Classical", "Metal", "Electronic", "Folk"];
-    sectorDiv.textContent = `${state.currentSector} (${genreNames[state.currentSector]})`;
 }

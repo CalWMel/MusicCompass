@@ -13,16 +13,19 @@ const state = {
 };
 
 // --- CONFIGURATION ---
-const SECTOR_SOUNDS = [
-    { type: 'sawtooth', freq: 110 }, // Sector 0 (Rock)
-    { type: 'sine',     freq: 261 }, // Sector 1 (Pop)
-    { type: 'square',   freq: 293 }, // Sector 2 (HipHop)
-    { type: 'triangle', freq: 329 }, // Sector 3 (Jazz)
-    { type: 'sawtooth', freq: 392 }, // Sector 4 (Classical)
-    { type: 'sine',     freq: 440 }, // Sector 5 (Metal)
-    { type: 'square',   freq: 493 }, // Sector 6 (Electronic)
-    { type: 'triangle', freq: 523 }  // Sector 7 (Folk)
+// Map sector indices to file paths
+const AUDIO_FILES = [
+    'assets/rock.mp3', // Rock
+    'assets/pop.mp3', // Pop
+    'assets/hiphop.mp3', // HipHop
+    'assets/jazz.mp3', // Jazz
+    'assets/classical.mp3', // Classical
+    'assets/metal.mp3', // Metal
+    'assets/electronic.mp3', // Electronic
+    'assets/folk.mp3'  // Folk
 ];
+
+const audioBuffers = []; // We will store loaded sounds here
 
 // --- DOM ELEMENTS ---
 const startBtn = document.getElementById('btn-start');
@@ -65,51 +68,76 @@ function initApp() {
 }
 
 // --- AUDIO ENGINE ---
-function initAudio() {
+async function initAudio() {
     if (state.isAudioInitialized) return;
+    
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    state.audioContext = new AudioContext();
+    state.audioContext = new AudioContext({ latencyHint: 'interactive' }); // Optimize for latency
+    
     if (state.audioContext.state === 'suspended') state.audioContext.resume();
-    state.isAudioInitialized = true;
+    
+    // Pre-load all audio files
+    statusDiv.textContent = "Loading Audio...";
+    try {
+        await loadAllBuffers();
+        statusDiv.textContent = "Audio Loaded. Ready.";
+        state.isAudioInitialized = true;
+    } catch (e) {
+        statusDiv.textContent = "Error loading audio.";
+        console.error(e);
+    }
+}
+
+async function loadAllBuffers() {
+    const promises = AUDIO_FILES.map(async (url, index) => {
+        const response = await fetch(url);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
+        audioBuffers[index] = audioBuffer;
+    });
+    await Promise.all(promises);
 }
 
 function playSectorSound(sectorIndex) {
-    if (!state.audioContext) return;
-    // Don't restart the sound if it's already playing for this sector
-    // This reduces "stutter" if the sensor flickers slightly
-    // but for now, we stick to the simple sequential logic
-    stopSound(); 
+    if (!state.audioContext || !audioBuffers[sectorIndex]) return;
 
-    const soundConfig = SECTOR_SOUNDS[sectorIndex];
+    stopSound(); // Ensure overlap doesn't get messy (Sequential Mode)
+
     const ctx = state.audioContext;
+    
+    // Create Source from Buffer
+    const source = ctx.createBufferSource();
+    source.buffer = audioBuffers[sectorIndex];
+    source.loop = true; // Loop the musicon while hovering
 
-    const osc = ctx.createOscillator();
-    osc.type = soundConfig.type;
-    osc.frequency.setValueAtTime(soundConfig.freq, ctx.currentTime);
-
+    // Create Panner (HRTF)
     const panner = ctx.createPanner();
     panner.panningModel = 'HRTF';
     panner.distanceModel = 'inverse';
     panner.refDistance = 1;
     panner.maxDistance = 10000;
-    panner.coneInnerAngle = 360; // Omnidirectional sound for now
-    
-    // Position logic
+    panner.coneInnerAngle = 360;
+
+    // Position logic (Same as before)
     const angleRad = (sectorIndex * 45) * (Math.PI / 180);
     const x = Math.sin(angleRad) * 2;
     const z = -Math.cos(angleRad) * 2;
     panner.setPosition(x, 0, z);
 
+    // Gain for Fade In/Out
     const gainNode = ctx.createGain();
     gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05); // Faster attack
+    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.1); // 100ms Fade in
 
-    osc.connect(panner);
+    // Connect Graph
+    source.connect(panner);
     panner.connect(gainNode);
     gainNode.connect(ctx.destination);
 
-    osc.start();
-    state.activeOscillator = { node: osc, gain: gainNode };
+    source.start();
+    
+    // Store active node to stop it later
+    state.activeOscillator = { node: source, gain: gainNode };
 }
 
 function stopSound() {

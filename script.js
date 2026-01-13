@@ -3,6 +3,7 @@ const SECTOR_COUNT = 8;
 const SECTOR_SIZE = 360 / SECTOR_COUNT; 
 const HYSTERESIS_THRESHOLD = 8; 
 const SELECT_SOUND_FILE = 'assets/select.mp3';
+const BACK_SOUND_FILE = 'assets/back.mp3';
 
 // --- STATE MANAGEMENT ---
 const state = {
@@ -104,16 +105,21 @@ async function loadCurrentLevelBuffers() {
 
 async function loadSelectSound() {
     try {
-        const response = await fetch(SELECT_SOUND_FILE);
-        const arrayBuffer = await response.arrayBuffer();
+        // Load Selection Sound
+        let response = await fetch(SELECT_SOUND_FILE);
+        let arrayBuffer = await response.arrayBuffer();
         state.selectBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
-    } catch (err) { console.error("Select sound missing", err); }
+
+        // Load Back Sound 
+        response = await fetch(BACK_SOUND_FILE);
+        arrayBuffer = await response.arrayBuffer();
+        state.backBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
+    } catch (err) { console.error("UI sounds missing", err); }
 }
 
 function playSectorSound(sectorIndex) {
     if (!state.audioContext || !state.currentBufferSet[sectorIndex]) return;
 
-    // Logic: Just play. The "currentSector" check was removed to fix the bug.
     stopSound(); 
 
     const ctx = state.audioContext;

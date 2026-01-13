@@ -11,6 +11,7 @@ const state = {
     audioContext: null,
     currentBufferSet: [],   // The sounds for the CURRENT level (Genre or Artist)
     selectBuffer: null,
+    backBuffer: null,
     isAudioInitialized: false,
     
     // Navigation State
@@ -105,16 +106,20 @@ async function loadCurrentLevelBuffers() {
 
 async function loadSelectSound() {
     try {
-        // Load Selection Sound
+        // 1. Load Selection Sound
         let response = await fetch(SELECT_SOUND_FILE);
         let arrayBuffer = await response.arrayBuffer();
         state.selectBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
 
-        // Load Back Sound 
+        // 2. Load Back Sound (CHECK THIS PART)
         response = await fetch(BACK_SOUND_FILE);
         arrayBuffer = await response.arrayBuffer();
         state.backBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
-    } catch (err) { console.error("UI sounds missing", err); }
+        
+        console.log("UI Sounds Loaded"); // Check console for this!
+    } catch (err) {
+        console.error("UI sounds missing or failed to decode", err);
+    }
 }
 
 function playSectorSound(sectorIndex) {
@@ -359,10 +364,25 @@ function handleShake(event) {
 
 async function goBack() {
     if (state.navigationLevel > 0) {
+        // Debugging line: tells us if the function is even running
+        console.log("Going Back..."); 
+
         stopSound();
-        if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // Distinct Vibrate
         
-        // Go Up
+        // --- PLAY BACK SOUND ---
+        if (state.backBuffer) {
+            const src = state.audioContext.createBufferSource();
+            src.buffer = state.backBuffer;
+            src.connect(state.audioContext.destination);
+            src.start();
+        } else {
+            console.warn("Back sound not loaded yet!");
+        }
+        
+        // Haptic Feedback
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]); 
+        
+        // Navigation Logic
         state.navigationLevel = 0;
         state.currentDataNode = MUSIC_LIBRARY;
         state.parentName = "Library";

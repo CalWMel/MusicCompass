@@ -22,7 +22,7 @@ const MUSIC_LIBRARY = [
             // TARGET 1: MICHAEL JACKSON (Has Tracks)
             { 
                 name: "Michael Jackson", 
-                audio: "assets/mj_preview.mp3", 
+                audio: "assets/pop.mp3", 
                 children: [
                     { name: "Billie Jean", audio: "assets/billie-jean.mp3" },
                     { name: "Thriller", audio: "assets/thriller.mp3" },
@@ -111,7 +111,7 @@ const MUSIC_LIBRARY = [
             // TARGET 2: DAFT PUNK (Has Tracks)
             { 
                 name: "Daft Punk", 
-                audio: "assets/daftpunk_preview.mp3", 
+                audio: "assets/electronic.mp3", 
                 children: [
                     { name: "Get Lucky", audio: "assets/get-lucky.mp3" },
                     { name: "Harder Better Faster", audio: "assets/harder-better-faster.mp3" },

@@ -1,3 +1,24 @@
+// --- MOBILE DEBUGGING CONSOLE ---
+(function() {
+    var debugDiv = document.createElement('div');
+    debugDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:150px; background:rgba(0,0,0,0.8); color:#0f0; font-family:monospace; font-size:12px; overflow-y:scroll; z-index:9999; pointer-events:none; padding:5px;';
+    document.body.appendChild(debugDiv);
+
+    function logToScreen(message, color) {
+        var line = document.createElement('div');
+        line.style.color = color || '#0f0';
+        line.textContent = "> " + message;
+        debugDiv.appendChild(line);
+        debugDiv.scrollTop = debugDiv.scrollHeight;
+    }
+
+    var oldLog = console.log;
+    console.log = function(msg) { logToScreen(msg); oldLog.apply(console, arguments); };
+
+    var oldError = console.error;
+    console.error = function(msg) { logToScreen(msg, '#ff4444'); oldError.apply(console, arguments); };
+})();
+
 // --- CONFIGURATION ---
 const SECTOR_COUNT = 8;
 const SECTOR_SIZE = 360 / SECTOR_COUNT; 
@@ -10,20 +31,24 @@ const ERROR_SOUND_FILE = 'assets/error.mp3';
 const state = {
     // Audio Engine
     audioContext: null,
-    currentBufferSet: [],   // The sounds for the CURRENT level (Genre or Artist)
+    currentBufferSet: [], 
+    bufferCache: {},
     selectBuffer: null,
     backBuffer: null,
     isAudioInitialized: false,
     
     // Navigation State
-    navigationLevel: 0,     // 0 = Genres, 1 = Artists
-    currentDataNode: MUSIC_LIBRARY, // Points to the current list of items
-    parentName: "Library",  // For UI display ("Library" or "Rock")
+    navigationLevel: 0,
+    currentDataNode: MUSIC_LIBRARY, 
+    parentName: "Library",
+    historyStack: [],
 
     // Interaction State
     isClutched: false,
     currentSector: -1,
     touchStartTime: 0,
+    clutchDebounce: null,
+    isBrowsing: false,
     
     // Calibration
     hasCalibrated: false,
@@ -32,7 +57,12 @@ const state = {
     
     // Playback
     activeSource: null,
-    activeGain: null
+    activeGain: null,
+
+    // Playback Memory
+    playbackStartTime: 0,
+    pauseOffset: 0,
+    pausedSector: -1
 };
 
 // --- DOM ELEMENTS ---
@@ -88,18 +118,32 @@ async function initAudio() {
     state.isAudioInitialized = true;
 }
 
+async function getAudioBuffer(url) {
+    // 1. Check if we already have it
+    if (state.bufferCache[url]) {
+        return state.bufferCache[url];
+    }
+
+    // 2. If not, fetch and decode it
+    try {
+        const response = await fetch(url);
+        const arrayBuffer = await response.arrayBuffer();
+        const decodedBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
+        
+        // 3. Save it for next time
+        state.bufferCache[url] = decodedBuffer;
+        return decodedBuffer;
+    } catch (err) {
+        console.error(`Failed to load ${url}`, err);
+        return null;
+    }
+}
+
 async function loadCurrentLevelBuffers() {
-    // Map the current data node (e.g., list of genres) to their audio URLs
-    const promises = state.currentDataNode.map(async (item, index) => {
-        try {
-            // In a real app, you might want to cache these
-            const response = await fetch(item.audio);
-            const arrayBuffer = await response.arrayBuffer();
-            return await state.audioContext.decodeAudioData(arrayBuffer);
-        } catch (err) {
-            console.error(`Missing audio for ${item.name}`, err);
-            return null; // Handle missing files gracefully
-        }
+    // Map the current items to their audio using the cache helper
+    const promises = state.currentDataNode.map(async (item) => {
+        // Use the new helper function instead of raw fetch
+        return await getAudioBuffer(item.audio);
     });
     
     state.currentBufferSet = await Promise.all(promises);
@@ -128,7 +172,7 @@ async function loadSelectSound() {
     }
 }
 
-function playSectorSound(sectorIndex) {
+function playSectorSound(sectorIndex, startOffset = 0) { // <--- NEW PARAMETER
     if (!state.audioContext || !state.currentBufferSet[sectorIndex]) return;
 
     stopSound(); 
@@ -137,9 +181,10 @@ function playSectorSound(sectorIndex) {
     const source = ctx.createBufferSource();
     source.buffer = state.currentBufferSet[sectorIndex];
     
-    // --- DYNAMIC LOOPING LOGIC ---
-    // If we are at the Root (Level 0), loop the genre music.
-    // If we are deeper (Level 1 or 2), play the artist/track once.
+    // Track when this specific playback started
+    // (Current Clock Time minus how many seconds we skipped)
+    state.playbackStartTime = ctx.currentTime - startOffset;
+
     if (state.navigationLevel === 0) {
         source.loop = true;
     } else {
@@ -163,7 +208,8 @@ function playSectorSound(sectorIndex) {
     panner.connect(gainNode);
     gainNode.connect(ctx.destination);
     
-    source.start();
+    // --- START AT THE OFFSET ---
+    source.start(0, startOffset); 
     
     state.activeSource = source;
     state.activeGain = gainNode;
@@ -200,17 +246,19 @@ function playConfirmationSound() {
 // --- INTERACTION LOGIC ---
 
 function handleOrientation(event) {
+    // ... (keep alpha calculation code) ...
     let alpha = event.alpha;
     if (alpha === null) return;
-
     let angle = 360 - alpha;
     angle = angle % 360;
     if (angle < 0) angle += 360;
-
     state.lastRawAngle = angle;
 
-    if (!state.isClutched) return;
+    // FIX: Check isBrowsing instead of isClutched
+    // This freezes the sector during a quick tap
+    if (!state.isBrowsing) return; 
 
+    // ... (rest of function is the same) ...
     let calibratedAngle = angle - state.calibratedOffset;
     if (calibratedAngle < 0) calibratedAngle += 360;
     if (calibratedAngle >= 360) calibratedAngle -= 360;
@@ -276,72 +324,121 @@ function engageClutch(e) {
     if (e.cancelable) e.preventDefault(); 
     state.touchStartTime = Date.now();
 
+    // 1. We are touching, but NOT browsing yet.
+    state.isClutched = true;
+    state.isBrowsing = false; 
+
+    // Calibration (Keep this immediate so we have a reference)
     if (!state.hasCalibrated) {
         state.calibratedOffset = state.lastRawAngle;
         state.hasCalibrated = true;
     }
 
-    state.isClutched = true;
-    statusDiv.textContent = `Browsing ${state.parentName}...`;
-    statusDiv.style.color = "#4CAF50";
+    // 2. Wait 200ms to see if it's a Hold
+    if (state.clutchDebounce) clearTimeout(state.clutchDebounce);
+    
+    state.clutchDebounce = setTimeout(() => {
+        if (state.isClutched) {
+            // User held long enough -> START BROWSING
+            state.isBrowsing = true; 
+            
+            // Visuals
+            statusDiv.textContent = `Browsing ${state.parentName}...`;
+            statusDiv.style.color = "#4CAF50";
 
-    if (state.currentSector !== -1) {
-        playSectorSound(state.currentSector);
-    }
+            // Audio
+            // Now that isBrowsing is true, handleOrientation will update the sector
+            // But we might need to trigger the first sound manually
+            if (state.currentSector !== -1) playSectorSound(state.currentSector);
+        }
+    }, 200); 
 }
 
 function disengageClutch(e) {
     state.isClutched = false;
+    state.isBrowsing = false; // <--- Stop the compass immediately
+
+    if (state.clutchDebounce) {
+        clearTimeout(state.clutchDebounce);
+        state.clutchDebounce = null;
+    }
+
     const touchDuration = Date.now() - state.touchStartTime;
 
     if (touchDuration < 250) {
-        // --- TAP = SELECT / DRILL DOWN ---
         handleSelection();
     } else {
-        // --- HOLD RELEASE = PAUSE ---
-        statusDiv.textContent = "Paused";
-        statusDiv.style.color = "#fff";
-        stopSound();
+        // --- HOLD RELEASE ---
+        if (state.navigationLevel === 2) {
+             statusDiv.textContent = "Playing... (Tap to Pause)";
+             statusDiv.style.color = "#00FF00";
+        } else {
+            statusDiv.textContent = "Paused";
+            statusDiv.style.color = "#fff";
+            stopSound();
+        }
     }
 }
 
 async function handleSelection() {
-    stopSound();
-    
-    const selectedItem = state.currentDataNode[state.currentSector];
-    if (!selectedItem) return;
+    // 1. Grab the item for the sector you are CURRENTLY facing
+    // (We use this for drilling down, but NOT for resuming if we moved)
+    const currentFacingItem = state.currentDataNode[state.currentSector];
+    if (!currentFacingItem) return;
 
-    // SCENARIO 1: IT HAS CHILDREN (Drill Down)
-    if (selectedItem.children && selectedItem.children.length > 0) {
+    // SCENARIO 1: DRILL DOWN (Genres/Artists)
+    if (currentFacingItem.children && currentFacingItem.children.length > 0) {
+        stopSound(); 
         
-        // Visuals & Sound
-        statusDiv.textContent = `Selected: ${selectedItem.name}`;
+        statusDiv.textContent = `Selected: ${currentFacingItem.name}`;
         statusDiv.style.color = "cyan";
         playConfirmationSound();
         if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
         
-        // Go deeper
-        enterLevel(selectedItem.children, selectedItem.name);
+        enterLevel(currentFacingItem.children, currentFacingItem.name);
         return;
     } 
     
-    // SCENARIO 2: IT IS A TRACK (We are at Level 2, so it's a song)
+    // SCENARIO 2: TRACK LAYER (Toggle Pause/Resume)
     if (state.navigationLevel === 2) {
-         statusDiv.innerHTML = `NOW PLAYING:<br>${selectedItem.name}`;
-         statusDiv.style.color = "#00FF00";
-         playConfirmationSound();
-         
-         // In a real app, you might lock the screen here.
-         // For now, let them keep browsing if they want.
-         return;
+        
+        if (state.activeSource) {
+            // --- PAUSE ---
+            state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
+            state.pausedSector = state.currentSector; // <--- LOCK THE SECTOR
+            
+            stopSound();
+            statusDiv.textContent = `Paused: ${currentFacingItem.name}`;
+            statusDiv.style.color = "yellow";
+        } 
+        else {
+            // --- RESUME ---
+            playConfirmationSound();
+            
+            setTimeout(() => {
+                // Because we used isBrowsing, currentSector is safely pointing 
+                // to the song we paused (or the one we last browsed to).
+                
+                // 1. Priority: Locked Sector -> Current Sector
+                const targetSector = (state.pausedSector !== -1) ? state.pausedSector : state.currentSector;
+                const targetItem = state.currentDataNode[targetSector];
+
+                // 2. Play
+                playSectorSound(targetSector, state.pauseOffset);
+                
+                statusDiv.textContent = `Now Playing: ${targetItem.name}`;
+                statusDiv.style.color = "#00FF00";
+            }, 100);
+        }
+        return;
     }
 
-    // SCENARIO 3: DEAD END (Artist with no tracks)
-    // We are at Level 1 (Artist) but children is empty
+    // SCENARIO 3: DEAD END
+    stopSound();
     playErrorSound();
-    statusDiv.textContent = `No tracks for ${selectedItem.name}`;
+    statusDiv.textContent = `No tracks for ${currentFacingItem.name}`;
     statusDiv.style.color = "red";
-    if (navigator.vibrate) navigator.vibrate([200]); // Long buzz
+    if (navigator.vibrate) navigator.vibrate([200]);
 }
 
 function playErrorSound() {
@@ -354,77 +451,111 @@ function playErrorSound() {
 }
 
 async function enterLevel(newData, title) {
-    // 1. Update State
+    // 1. Save Current State to History Stack
+    state.historyStack.push({
+        node: state.currentDataNode,
+        name: state.parentName,
+        level: state.navigationLevel
+    });
+
+    // 2. Update State
     state.navigationLevel++;
     state.currentDataNode = newData;
     state.parentName = title;
-    state.currentSector = -1; // Reset sector so we don't start playing instantly
+    state.currentSector = -1; 
 
-    // 2. Load New Audio
+    // 3. Load New Audio
     statusDiv.textContent = `Loading ${title}...`;
     await loadCurrentLevelBuffers();
     
-    statusDiv.textContent = `Inside ${title}. Hold to Browse.`;
-    
-    // 3. Re-Calibrate?
-    // Design Choice: Do we keep the same "North" or reset it?
-    // Let's keep "North" (Absolute) for spatial memory consistency.
+    statusDiv.textContent = `${title}. Hold to Browse.`;
 }
 
 // --- BACK GESTURE (SHAKE) ---
-let lastX = 0, lastY = 0, lastZ = 0;
+let lastX = 0, lastY = 0; // We don't track Z anymore
+let shakeCount = 0;
 let lastShakeTime = 0;
+let debounceTimer = 0;
 
 function handleShake(event) {
-    // Simple Shake Detection
-    const current = event.accelerationIncludingGravity;
+    const current = event.acceleration || event.accelerationIncludingGravity;
     if (!current) return;
-    
-    const now = Date.now();
-    if ((now - lastShakeTime) < 1000) return; // Debounce 1s
 
+    const now = Date.now();
+    
+    // 1. GLOBAL COOLDOWN (2s)
+    if ((now - debounceTimer) < 2000) return;
+
+    // 2. CALCULATE FORCE (IGNORE Z-AXIS)
+    // We only look at X (Side-to-Side) and Y (Up/Down).
+    // The Z-axis (Depth) creates false positives when putting the phone on a table.
     const deltaX = Math.abs(lastX - current.x);
     const deltaY = Math.abs(lastY - current.y);
-    const deltaZ = Math.abs(lastZ - current.z);
 
-    if ((deltaX + deltaY + deltaZ) > 25) { // Threshold
-        goBack();
+    // Update history
+    lastX = current.x;
+    lastY = current.y;
+
+    // 3. THRESHOLD
+    // Since we removed Z, we can lower this slightly for a comfortable flick.
+    const threshold = event.acceleration ? 6 : 15;
+
+    if ((deltaX + deltaY) > threshold) {
+        
+        const timeSinceLastShake = now - lastShakeTime;
+
+        // A. NOISE FILTER (100ms)
+        // Ignores ultra-fast vibration from impact.
+        if (timeSinceLastShake < 100) return;
+
+        // B. COMBO WINDOW (Tightened to 600ms)
+        // You must shake rhythmically. If you stop for 0.6s, the count resets.
+        // This stops "Pick up -> Pause -> Tilt" from triggering back.
+        if (timeSinceLastShake < 600) {
+            shakeCount++;
+        } else {
+            shakeCount = 1;
+        }
+
         lastShakeTime = now;
     }
 
-    lastX = current.x;
-    lastY = current.y;
-    lastZ = current.z;
+    // 4. TRIGGER ACTION
+    // Requires 3 back-and-forth movements.
+    if (shakeCount >= 3) {
+        goBack();
+        shakeCount = 0;
+        debounceTimer = now; 
+    }
 }
 
 async function goBack() {
-    if (state.navigationLevel > 0) {
-        // Debugging line: tells us if the function is even running
-        console.log("Going Back..."); 
-
+    // Check if there is history to go back to
+    if (state.historyStack.length > 0) {
+        console.log("Going Back one level...");
         stopSound();
-        
-        // --- PLAY BACK SOUND ---
+
+        // Play Back Sound
         if (state.backBuffer) {
             const src = state.audioContext.createBufferSource();
             src.buffer = state.backBuffer;
             src.connect(state.audioContext.destination);
             src.start();
-        } else {
-            console.warn("Back sound not loaded yet!");
         }
-        
-        // Haptic Feedback
-        if (navigator.vibrate) navigator.vibrate([100, 50, 100]); 
-        
-        // Navigation Logic
-        state.navigationLevel = 0;
-        state.currentDataNode = MUSIC_LIBRARY;
-        state.parentName = "Library";
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+        // 1. Pop the previous state
+        const previousState = state.historyStack.pop();
+
+        // 2. Restore State
+        state.currentDataNode = previousState.node;
+        state.parentName = previousState.name;
+        state.navigationLevel = previousState.level;
         state.currentSector = -1;
 
-        statusDiv.textContent = "Returning to Library...";
+        // 3. Reload Audio for that level
+        statusDiv.textContent = `Returning to ${state.parentName}...`;
         await loadCurrentLevelBuffers();
-        statusDiv.textContent = "Library. Hold to Browse.";
+        statusDiv.textContent = `${state.parentName}. Hold to Browse.`;
     }
 }

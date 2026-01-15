@@ -46,6 +46,15 @@
 
 <body>
 
+    <div id="setup-controls" style="text-align:center; margin-bottom: 20px;">
+        <label for="mode-select" style="font-size: 1.2rem; color: #aaa;">Interaction Mode:</label><br>
+        <select id="mode-select"
+            style="padding: 10px; font-size: 1rem; margin-top: 10px; background: #333; color: #fff; border: 1px solid #555;">
+            <option value="CLUTCH">Clutch (Hold to Browse)</option>
+            <option value="ALWAYS_ON">Always-On (Tap to Select)</option>
+        </select>
+    </div>
+
     <button id="btn-start">Start / Request Permissions</button>
 
     <div id="ui-container" style="display:none; text-align:center;">
@@ -54,7 +63,7 @@
         <div id="sector-display">-</div>
         <p class="instruction">Press and HOLD screen to rotate compass.</p>
     </div>
-    
+
     <script src="data.js"></script>
     <script src="script.js"></script>
 </body>

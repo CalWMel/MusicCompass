@@ -1,23 +1,23 @@
-// --- MOBILE DEBUGGING CONSOLE ---
-(function() {
-    var debugDiv = document.createElement('div');
-    debugDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:150px; background:rgba(0,0,0,0.8); color:#0f0; font-family:monospace; font-size:12px; overflow-y:scroll; z-index:9999; pointer-events:none; padding:5px;';
-    document.body.appendChild(debugDiv);
+// // --- MOBILE DEBUGGING CONSOLE ---
+// (function() {
+//     var debugDiv = document.createElement('div');
+//     debugDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:150px; background:rgba(0,0,0,0.8); color:#0f0; font-family:monospace; font-size:12px; overflow-y:scroll; z-index:9999; pointer-events:none; padding:5px;';
+//     document.body.appendChild(debugDiv);
 
-    function logToScreen(message, color) {
-        var line = document.createElement('div');
-        line.style.color = color || '#0f0';
-        line.textContent = "> " + message;
-        debugDiv.appendChild(line);
-        debugDiv.scrollTop = debugDiv.scrollHeight;
-    }
+//     function logToScreen(message, color) {
+//         var line = document.createElement('div');
+//         line.style.color = color || '#0f0';
+//         line.textContent = "> " + message;
+//         debugDiv.appendChild(line);
+//         debugDiv.scrollTop = debugDiv.scrollHeight;
+//     }
 
-    var oldLog = console.log;
-    console.log = function(msg) { logToScreen(msg); oldLog.apply(console, arguments); };
+//     var oldLog = console.log;
+//     console.log = function(msg) { logToScreen(msg); oldLog.apply(console, arguments); };
 
-    var oldError = console.error;
-    console.error = function(msg) { logToScreen(msg, '#ff4444'); oldError.apply(console, arguments); };
-})();
+//     var oldError = console.error;
+//     console.error = function(msg) { logToScreen(msg, '#ff4444'); oldError.apply(console, arguments); };
+// })();
 
 // --- CONFIGURATION ---
 const SECTOR_COUNT = 8;
@@ -29,6 +29,10 @@ const ERROR_SOUND_FILE = 'assets/error.mp3';
 
 // --- STATE MANAGEMENT ---
 const state = {
+
+    // Mode
+    experimentMode: 'CLUTCH',
+
     // Audio Engine
     audioContext: null,
     currentBufferSet: [], 
@@ -49,6 +53,8 @@ const state = {
     touchStartTime: 0,
     clutchDebounce: null,
     isBrowsing: false,
+    isManualPause: false,
+    isLocked: false,
     
     // Calibration
     hasCalibrated: false,
@@ -62,7 +68,11 @@ const state = {
     // Playback Memory
     playbackStartTime: 0,
     pauseOffset: 0,
-    pausedSector: -1
+    pausedSector: -1,
+
+    // NEW FLAGS
+    isLoading: false,  
+    lastTapTime: 0,        
 };
 
 // --- DOM ELEMENTS ---
@@ -73,6 +83,13 @@ const sectorDiv = document.getElementById('sector-display');
 
 // --- INITIALIZATION ---
 startBtn.addEventListener('click', async () => {
+    // 1. CAPTURE THE SELECTED MODE
+    const selector = document.getElementById('mode-select');
+    state.experimentMode = selector.value;
+    
+    // Hide the setup controls
+    document.getElementById('setup-controls').style.display = 'none';
+
     await initAudio();
     if (typeof DeviceOrientationEvent !== 'undefined' && 
         typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -88,8 +105,16 @@ function initApp() {
     startBtn.style.display = 'none';
     uiContainer.style.display = 'block';
     
+    // EXPERIMENT SETUP
+    if (state.experimentMode === 'ALWAYS_ON') {
+        state.isBrowsing = true; // Compass is active by default
+        statusDiv.textContent = "Always-On Mode. Tap to Select.";
+    } else {
+        state.isBrowsing = false; // Wait for clutch
+    }
+
     window.addEventListener('deviceorientation', handleOrientation);
-    window.addEventListener('devicemotion', handleShake); // For "Back" gesture
+    window.addEventListener('devicemotion', handleShake); 
     
     const engage = (e) => engageClutch(e);
     const disengage = (e) => disengageClutch(e);
@@ -172,8 +197,9 @@ async function loadSelectSound() {
     }
 }
 
-function playSectorSound(sectorIndex, startOffset = 0) { // <--- NEW PARAMETER
-    if (!state.audioContext || !state.currentBufferSet[sectorIndex]) return;
+function playSectorSound(sectorIndex, startOffset = 0) {
+
+    if (state.isLoading || !state.audioContext || !state.currentBufferSet[sectorIndex]) return;
 
     stopSound(); 
 
@@ -181,8 +207,6 @@ function playSectorSound(sectorIndex, startOffset = 0) { // <--- NEW PARAMETER
     const source = ctx.createBufferSource();
     source.buffer = state.currentBufferSet[sectorIndex];
     
-    // Track when this specific playback started
-    // (Current Clock Time minus how many seconds we skipped)
     state.playbackStartTime = ctx.currentTime - startOffset;
 
     if (state.navigationLevel === 0) {
@@ -192,7 +216,7 @@ function playSectorSound(sectorIndex, startOffset = 0) { // <--- NEW PARAMETER
     }
 
     const panner = ctx.createPanner();
-    panner.panningModel = 'HRTF';
+    panner.panningModel = 'equalpower';
     panner.distanceModel = 'inverse';
     
     const angleRad = (sectorIndex * SECTOR_SIZE) * (Math.PI / 180);
@@ -208,7 +232,6 @@ function playSectorSound(sectorIndex, startOffset = 0) { // <--- NEW PARAMETER
     panner.connect(gainNode);
     gainNode.connect(ctx.destination);
     
-    // --- START AT THE OFFSET ---
     source.start(0, startOffset); 
     
     state.activeSource = source;
@@ -246,7 +269,6 @@ function playConfirmationSound() {
 // --- INTERACTION LOGIC ---
 
 function handleOrientation(event) {
-    // ... (keep alpha calculation code) ...
     let alpha = event.alpha;
     if (alpha === null) return;
     let angle = 360 - alpha;
@@ -254,11 +276,17 @@ function handleOrientation(event) {
     if (angle < 0) angle += 360;
     state.lastRawAngle = angle;
 
-    // FIX: Check isBrowsing instead of isClutched
-    // This freezes the sector during a quick tap
+    // --- NEW: Calibration Logic ---
+    if (!state.hasCalibrated) {
+        // In Always-On, calibrate immediately. 
+        if (state.experimentMode === 'ALWAYS_ON') {
+            state.calibratedOffset = angle;
+            state.hasCalibrated = true;
+        }
+    }
+
     if (!state.isBrowsing) return; 
 
-    // ... (rest of function is the same) ...
     let calibratedAngle = angle - state.calibratedOffset;
     if (calibratedAngle < 0) calibratedAngle += 360;
     if (calibratedAngle >= 360) calibratedAngle -= 360;
@@ -304,9 +332,13 @@ function calculateSector(angle) {
 }
 
 function setSector(newSector) {
-    // Check if the sector is valid in our data (e.g. if a genre has no children, we handle it?)
-    // For now, we assume 8 items always exist or are undefined.
-    
+    // FIX: Hard Lock. If locked, ignore all compass movement.
+    // This keeps the song playing even if you turn 180 degrees.
+    if (state.isLocked) return;
+
+    // (Keep the isManualPause check if you want, but isLocked covers it)
+    if (state.isManualPause) return;
+
     if (state.currentSector !== newSector) {
         state.currentSector = newSector;
         
@@ -322,41 +354,49 @@ function setSector(newSector) {
 
 function engageClutch(e) {
     if (e.cancelable) e.preventDefault(); 
-    state.touchStartTime = Date.now();
+    
+    // --- BRANCH 1: ALWAYS-ON MODE ---
+    if (state.experimentMode === 'ALWAYS_ON') {
+        const now = Date.now();
+        // FIX: Debounce to prevent double-firing (Touch + Mouse)
+        if (now - state.lastTapTime < 200) return; 
+        state.lastTapTime = now;
 
-    // 1. We are touching, but NOT browsing yet.
+        handleSelection();
+        return;
+    }
+
+    // --- BRANCH 2: CLUTCH MODE (Original Logic) ---
+    state.touchStartTime = Date.now();
     state.isClutched = true;
     state.isBrowsing = false; 
 
-    // Calibration (Keep this immediate so we have a reference)
     if (!state.hasCalibrated) {
         state.calibratedOffset = state.lastRawAngle;
         state.hasCalibrated = true;
     }
 
-    // 2. Wait 200ms to see if it's a Hold
     if (state.clutchDebounce) clearTimeout(state.clutchDebounce);
     
     state.clutchDebounce = setTimeout(() => {
         if (state.isClutched) {
-            // User held long enough -> START BROWSING
             state.isBrowsing = true; 
-            
-            // Visuals
             statusDiv.textContent = `Browsing ${state.parentName}...`;
             statusDiv.style.color = "#4CAF50";
-
-            // Audio
-            // Now that isBrowsing is true, handleOrientation will update the sector
-            // But we might need to trigger the first sound manually
             if (state.currentSector !== -1) playSectorSound(state.currentSector);
         }
     }, 200); 
 }
 
 function disengageClutch(e) {
+    // --- BRANCH 1: ALWAYS-ON MODE ---
+    if (state.experimentMode === 'ALWAYS_ON') {
+        return;
+    }
+
+    // --- BRANCH 2: CLUTCH MODE (Original Logic) ---
     state.isClutched = false;
-    state.isBrowsing = false; // <--- Stop the compass immediately
+    state.isBrowsing = false; 
 
     if (state.clutchDebounce) {
         clearTimeout(state.clutchDebounce);
@@ -368,7 +408,6 @@ function disengageClutch(e) {
     if (touchDuration < 250) {
         handleSelection();
     } else {
-        // --- HOLD RELEASE ---
         if (state.navigationLevel === 2) {
              statusDiv.textContent = "Playing... (Tap to Pause)";
              statusDiv.style.color = "#00FF00";
@@ -381,14 +420,14 @@ function disengageClutch(e) {
 }
 
 async function handleSelection() {
-    // 1. Grab the item for the sector you are CURRENTLY facing
-    // (We use this for drilling down, but NOT for resuming if we moved)
     const currentFacingItem = state.currentDataNode[state.currentSector];
     if (!currentFacingItem) return;
 
     // SCENARIO 1: DRILL DOWN (Genres/Artists)
     if (currentFacingItem.children && currentFacingItem.children.length > 0) {
         stopSound(); 
+        state.isManualPause = false; 
+        state.isLocked = false; // Reset lock
         
         statusDiv.textContent = `Selected: ${currentFacingItem.name}`;
         statusDiv.style.color = "cyan";
@@ -399,36 +438,42 @@ async function handleSelection() {
         return;
     } 
     
-    // SCENARIO 2: TRACK LAYER (Toggle Pause/Resume)
+    // SCENARIO 2: TRACK LAYER (Lock / Pause / Resume)
     if (state.navigationLevel === 2) {
         
-        if (state.activeSource) {
-            // --- PAUSE ---
-            state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
-            state.pausedSector = state.currentSector; // <--- LOCK THE SECTOR
+        // --- A. IF BROWSING -> LOCK IT ---
+        if (!state.isLocked) {
+            state.isLocked = true; // FREEZE COMPASS
+            state.isManualPause = false;
             
-            stopSound();
-            statusDiv.textContent = `Paused: ${currentFacingItem.name}`;
-            statusDiv.style.color = "yellow";
-        } 
-        else {
-            // --- RESUME ---
+            statusDiv.textContent = `Locked: ${currentFacingItem.name}`;
+            statusDiv.style.color = "#00FF00"; // Green
+            playConfirmationSound();
+            // Note: We don't need to start/stop audio. It's already playing.
+            // Now it just won't change when you move.
+            return;
+        }
+
+        // --- B. IF LOCKED -> TOGGLE PAUSE ---
+        
+        if (state.isManualPause) {
+            // RESUME (Still Locked)
+            state.isManualPause = false;
             playConfirmationSound();
             
             setTimeout(() => {
-                // Because we used isBrowsing, currentSector is safely pointing 
-                // to the song we paused (or the one we last browsed to).
-                
-                // 1. Priority: Locked Sector -> Current Sector
-                const targetSector = (state.pausedSector !== -1) ? state.pausedSector : state.currentSector;
-                const targetItem = state.currentDataNode[targetSector];
-
-                // 2. Play
-                playSectorSound(targetSector, state.pauseOffset);
-                
-                statusDiv.textContent = `Now Playing: ${targetItem.name}`;
+                // Since we are locked, currentSector is still the correct song
+                playSectorSound(state.currentSector, state.pauseOffset);
+                statusDiv.textContent = `Locked: ${currentFacingItem.name}`;
                 statusDiv.style.color = "#00FF00";
             }, 100);
+        } else {
+            // PAUSE (Still Locked)
+            state.isManualPause = true;
+            state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
+            stopSound();
+            statusDiv.textContent = `Paused: ${currentFacingItem.name}`;
+            statusDiv.style.color = "yellow";
         }
         return;
     }
@@ -451,24 +496,43 @@ function playErrorSound() {
 }
 
 async function enterLevel(newData, title) {
-    // 1. Save Current State to History Stack
+
+    // 1. LOCK & CLEANUP
+    stopSound(); // Stop the Artist music immediately
+    state.isManualPause = false; // Reset Pause State
+    state.isLocked = false; // Reset Lock State
+    state.isLoading = true; // Prevent compass from triggering sounds during load
+    state.currentBufferSet = []; // Clear old buffers (Fixes "Ghost Audio")
+    state.currentSector = -1; // Reset sector
+    
     state.historyStack.push({
         node: state.currentDataNode,
         name: state.parentName,
         level: state.navigationLevel
     });
 
-    // 2. Update State
     state.navigationLevel++;
     state.currentDataNode = newData;
     state.parentName = title;
-    state.currentSector = -1; 
 
-    // 3. Load New Audio
     statusDiv.textContent = `Loading ${title}...`;
+    
+    // 2. LOAD
     await loadCurrentLevelBuffers();
     
-    statusDiv.textContent = `${title}. Hold to Browse.`;
+    // 3. UNLOCK & RESTART
+    state.isLoading = false;
+    
+    // FIX: Force the compass to "re-discover" the sector.
+    // By resetting to -1 AFTER load, the next compass update triggers a "change",
+    // causing the new track to start playing immediately.
+    state.currentSector = -1; 
+    
+    if (state.experimentMode === 'ALWAYS_ON') {
+        statusDiv.textContent = `${title}. Tap to Select.`;
+    } else {
+        statusDiv.textContent = `${title}. Hold to Browse.`;
+    }
 }
 
 // --- BACK GESTURE (SHAKE) ---
@@ -521,9 +585,22 @@ function handleShake(event) {
     }
 
     // 4. TRIGGER ACTION
-    // Requires 3 back-and-forth movements.
     if (shakeCount >= 3) {
-        goBack();
+        
+        // NEW: Check if we are locked first
+        if (state.isLocked) {
+            // UNLOCK Action
+            state.isLocked = false;
+            state.isManualPause = false;
+            playSectorSound(state.currentSector); // Restart audio tracking
+            statusDiv.textContent = "Unlocked. Tilt to Browse.";
+            statusDiv.style.color = "#fff";
+            if (navigator.vibrate) navigator.vibrate([50, 50]);
+        } else {
+            // Standard Back Action
+            goBack();
+        }
+        
         shakeCount = 0;
         debounceTimer = now; 
     }
@@ -544,6 +621,11 @@ async function goBack() {
         }
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
+        // --- NEW: Reset Logic Flags ---
+        // Ensure we aren't paused or locked when we arrive at the previous level
+        state.isManualPause = false; 
+        state.isLocked = false;      
+
         // 1. Pop the previous state
         const previousState = state.historyStack.pop();
 
@@ -556,6 +638,12 @@ async function goBack() {
         // 3. Reload Audio for that level
         statusDiv.textContent = `Returning to ${state.parentName}...`;
         await loadCurrentLevelBuffers();
-        statusDiv.textContent = `${state.parentName}. Hold to Browse.`;
+        
+        // --- UPDATED: Show correct instruction based on Mode ---
+        if (state.experimentMode === 'ALWAYS_ON') {
+            statusDiv.textContent = `${state.parentName}. Tap to Select.`;
+        } else {
+            statusDiv.textContent = `${state.parentName}. Hold to Browse.`;
+        }
     }
 }

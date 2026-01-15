@@ -92,7 +92,7 @@ const MUSIC_LIBRARY = [
             { name: "Deadmau5", audio: "assets/electronic.mp3" },
             { name: "David Guetta", audio: "assets/electronic.mp3" },
             { name: "Marshmello", audio: "assets/electronic.mp3" },
-            { name: "Zedd", audio: "assets/electronic.mp3" },
+            { name: "Daft Punk", audio: "assets/electronic.mp3" },
             { name: "Tiesto", audio: "assets/electronic.mp3" },
             { name: "Avicii", audio: "assets/electronic.mp3" }
         ]

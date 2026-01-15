@@ -4,6 +4,7 @@ const SECTOR_SIZE = 360 / SECTOR_COUNT;
 const HYSTERESIS_THRESHOLD = 8; 
 const SELECT_SOUND_FILE = 'assets/select.mp3';
 const BACK_SOUND_FILE = 'assets/back.mp3';
+const ERROR_SOUND_FILE = 'assets/error.mp3';
 
 // --- STATE MANAGEMENT ---
 const state = {
@@ -111,12 +112,17 @@ async function loadSelectSound() {
         let arrayBuffer = await response.arrayBuffer();
         state.selectBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
 
-        // 2. Load Back Sound (CHECK THIS PART)
+        // 2. Load Back Sound
         response = await fetch(BACK_SOUND_FILE);
         arrayBuffer = await response.arrayBuffer();
         state.backBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
+
+        // 3. Load Error Sound
+        response = await fetch(ERROR_SOUND_FILE);
+        arrayBuffer = await response.arrayBuffer();
+        state.errorBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
         
-        console.log("UI Sounds Loaded"); // Check console for this!
+        console.log("UI Sounds Loaded"); 
     } catch (err) {
         console.error("UI sounds missing or failed to decode", err);
     }
@@ -130,9 +136,16 @@ function playSectorSound(sectorIndex) {
     const ctx = state.audioContext;
     const source = ctx.createBufferSource();
     source.buffer = state.currentBufferSet[sectorIndex];
-    source.loop = true;
+    
+    // --- DYNAMIC LOOPING LOGIC ---
+    // If we are at the Root (Level 0), loop the genre music.
+    // If we are deeper (Level 1 or 2), play the artist/track once.
+    if (state.navigationLevel === 0) {
+        source.loop = true;
+    } else {
+        source.loop = false;
+    }
 
-    // HRTF Panner
     const panner = ctx.createPanner();
     panner.panningModel = 'HRTF';
     panner.distanceModel = 'inverse';
@@ -149,6 +162,7 @@ function playSectorSound(sectorIndex) {
     source.connect(panner);
     panner.connect(gainNode);
     gainNode.connect(ctx.destination);
+    
     source.start();
     
     state.activeSource = source;
@@ -297,24 +311,45 @@ async function handleSelection() {
     const selectedItem = state.currentDataNode[state.currentSector];
     if (!selectedItem) return;
 
-    // Visual & Audio Feedback
-    statusDiv.textContent = `Selected: ${selectedItem.name}`;
-    statusDiv.style.color = "cyan";
-    playConfirmationSound();
-    if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+    // SCENARIO 1: IT HAS CHILDREN (Drill Down)
+    if (selectedItem.children && selectedItem.children.length > 0) {
+        
+        // Visuals & Sound
+        statusDiv.textContent = `Selected: ${selectedItem.name}`;
+        statusDiv.style.color = "cyan";
+        playConfirmationSound();
+        if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+        
+        // Go deeper
+        enterLevel(selectedItem.children, selectedItem.name);
+        return;
+    } 
+    
+    // SCENARIO 2: IT IS A TRACK (We are at Level 2, so it's a song)
+    if (state.navigationLevel === 2) {
+         statusDiv.innerHTML = `NOW PLAYING:<br>${selectedItem.name}`;
+         statusDiv.style.color = "#00FF00";
+         playConfirmationSound();
+         
+         // In a real app, you might lock the screen here.
+         // For now, let them keep browsing if they want.
+         return;
+    }
 
-    // LOGIC: Drill Down vs Play
-    if (state.navigationLevel === 0) {
-        // We are at Root (Genres) -> Go to Level 1 (Artists)
-        if (selectedItem.children && selectedItem.children.length > 0) {
-            enterLevel(selectedItem.children, selectedItem.name);
-        } else {
-            console.log("No children for this genre.");
-        }
-    } else {
-        // We are at Level 1 (Artists) -> Just Play (Leaf node)
-        console.log(`Playing Track: ${selectedItem.name}`);
-        // Here you would trigger the full song player in the future
+    // SCENARIO 3: DEAD END (Artist with no tracks)
+    // We are at Level 1 (Artist) but children is empty
+    playErrorSound();
+    statusDiv.textContent = `No tracks for ${selectedItem.name}`;
+    statusDiv.style.color = "red";
+    if (navigator.vibrate) navigator.vibrate([200]); // Long buzz
+}
+
+function playErrorSound() {
+    if (state.errorBuffer) {
+        const src = state.audioContext.createBufferSource();
+        src.buffer = state.errorBuffer;
+        src.connect(state.audioContext.destination);
+        src.start();
     }
 }
 

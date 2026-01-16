@@ -17,12 +17,12 @@ const MUSIC_LIBRARY = [
         name: "Pop",
         audio: "assets/pop.mp3",
         children: [
-            { name: "Taylor Swift", audio: "assets/pop.mp3" },
+            { name: "Taylor Swift", audio: "assets/taylor-swift.mp3" },
 
             // TARGET 1: MICHAEL JACKSON (Has Tracks)
             { 
                 name: "Michael Jackson", 
-                audio: "assets/pop.mp3", 
+                audio: "assets/michael-jackson.mp3", 
                 children: [
                     { name: "Billie Jean", audio: "assets/billie-jean.mp3" },
                     { name: "Thriller", audio: "assets/thriller.mp3" },
@@ -34,84 +34,83 @@ const MUSIC_LIBRARY = [
                     { name: "The Way You Make Me Feel", audio: "assets/the-way-you-make-me-feel.mp3" }
                 ] 
             },
-            { name: "Madonna", audio: "assets/pop.mp3" },
-            { name: "Beyonce", audio: "assets/pop.mp3" },
-            { name: "Lady Gaga", audio: "assets/pop.mp3" },
-            { name: "Justin Bieber", audio: "assets/pop.mp3" },
-            { name: "Rihanna", audio: "assets/pop.mp3" },
-            { name: "Katy Perry", audio: "assets/pop.mp3" }
+            { name: "Madonna", audio: "assets/madonna.mp3" },
+            { name: "Beyonce", audio: "assets/beyonce.mp3" },
+            { name: "Lady Gaga", audio: "assets/lady-gaga.mp3" },
+            { name: "Justin Bieber", audio: "assets/justin-bieber.mp3" },
+            { name: "Rihanna", audio: "assets/rihanna.mp3" },
+            { name: "Katy Perry", audio: "assets/katy-perry.mp3" }
         ]
     },
     {
         name: "HipHop",
         audio: "assets/hiphop.mp3",
         children: [
-            { name: "Kendrick Lamar", audio: "assets/hiphop.mp3" },
-            { name: "Drake", audio: "assets/hiphop.mp3" },
-            { name: "J. Cole", audio: "assets/hiphop.mp3" },
-            { name: "Nicki Minaj", audio: "assets/hiphop.mp3" },
-            { name: "Cardi B", audio: "assets/hiphop.mp3" },
-            { name: "Travis Scott", audio: "assets/hiphop.mp3" },
-            { name: "Lil Wayne", audio: "assets/hiphop.mp3" },
-            { name: "Post Malone", audio: "assets/hiphop.mp3" }
+            { name: "Kendrick Lamar", audio: "assets/kendrick-lamar.mp3" },
+            { name: "Drake", audio: "assets/drake.mp3" },
+            { name: "J. Cole", audio: "assets/j-cole.mp3" },
+            { name: "50 Cent", audio: "assets/50-cent.mp3" },
+            { name: "Eminem", audio: "assets/eminem.mp3" },
+            { name: "Snoop Dogg", audio: "assets/snoop-dogg.mp3" },
+            { name: "Ice Cube", audio: "assets/ice-cube.mp3" },
+            { name: "Dr Dre", audio: "assets/dr-dre.mp3" }
         ]
     },
     {
         name: "Jazz",
         audio: "assets/jazz.mp3",
         children: [
-            { name: "Miles Davis", audio: "assets/jazz.mp3" },
-            { name: "John Coltrane", audio: "assets/jazz.mp3" },
-            { name: "Ella Fitzgerald", audio: "assets/jazz.mp3" },
-            { name: "Louis Armstrong", audio: "assets/jazz.mp3" },
-            { name: "Duke Ellington", audio: "assets/jazz.mp3" },
-            { name: "Charlie Parker", audio: "assets/jazz.mp3" },
-            { name: "Billie Holiday", audio: "assets/jazz.mp3" },
-            { name: "Thelonious Monk", audio: "assets/jazz.mp3" }
+            { name: "Miles Davis", audio: "assets/miles-davis.mp3" },
+            { name: "John Coltrane", audio: "assets/john-coltrane.mp3" },
+            { name: "Ella Fitzgerald", audio: "assets/ella-fitzgerald.mp3" },
+            { name: "Louis Armstrong", audio: "assets/louis-armstrong.mp3" },
+            { name: "Duke Ellington", audio: "assets/duke-ellington.mp3" },
+            { name: "Charlie Parker", audio: "assets/charlie-parker.mp3" },
+            { name: "Billie Holiday", audio: "assets/billie-holiday.mp3" },
+            { name: "Thelonious Monk", audio: "assets/thelonious-monk.mp3" }
         ]
     },
     {
         name: "Classical",
         audio: "assets/classical.mp3",
         children: [
-            { name: "Ludwig van Beethoven", audio: "assets/classical.mp3" },
-            { name: "Johann Sebastian Bach", audio: "assets/classical.mp3" },
-            { name: "Wolfgang Amadeus Mozart", audio: "assets/classical.mp3" },
-            { name: "Frédéric Chopin", audio: "assets/classical.mp3" },
-            { name: "Pyotr Ilyich Tchaikovsky", audio: "assets/classical.mp3" },
-            { name: "Antonio Vivaldi", audio: "assets/classical.mp3" },
-            { name: "Johannes Brahms", audio: "assets/classical.mp3" },
-            { name: "Claude Debussy", audio: "assets/classical.mp3" }
+            { name: "Ludwig van Beethoven", audio: "assets/ludwig-van-beethoven.mp3" },
+            { name: "Johann Sebastian Bach", audio: "assets/johann-sebastian-bach.mp3" },
+            { name: "Wolfgang Amadeus Mozart", audio: "assets/wolfgang-amadeus-mozart.mp3" },
+            { name: "Frédéric Chopin", audio: "assets/frédéric-chopin.mp3" },
+            { name: "Pyotr Ilyich Tchaikovsky", audio: "assets/pyotr-ilyich-tchaikovsky.mp3" },
+            { name: "Antonio Vivaldi", audio: "assets/antonio-vivaldi.mp3" },
+            { name: "Johannes Brahms", audio: "assets/johannes-brahms.mp3" },
+            { name: "Claude Debussy", audio: "assets/claude-debussy.mp3" }
         ]
     },
     {
         name: "Metal",
         audio: "assets/metal.mp3",
         children: [
-            { name: "Iron Maiden", audio: "assets/metal.mp3" },
-            { name: "Black Sabbath", audio: "assets/metal.mp3" },
-            { name: "Judas Priest", audio: "assets/metal.mp3" },
-            { name: "Slipknot", audio: "assets/metal.mp3" },
-            { name: "Megadeth", audio: "assets/metal.mp3" },
-            { name: "Anthrax", audio: "assets/metal.mp3" },
-            { name: "Pantera", audio: "assets/metal.mp3" },
-            { name: "System of a Down", audio: "assets/metal.mp3" }
+            { name: "Iron Maiden", audio: "assets/iron-maiden.mp3" },
+            { name: "Black Sabbath", audio: "assets/black-sabbath.mp3" },
+            { name: "Judas Priest", audio: "assets/judas-priest.mp3" },
+            { name: "Slipknot", audio: "assets/slipknot.mp3" },
+            { name: "Megadeth", audio: "assets/megadeth.mp3" },
+            { name: "Metallica", audio: "assets/metallica.mp3" },
+            { name: "Pantera", audio: "assets/pantera.mp3" },
+            { name: "System of a Down", audio: "assets/system-of-a-down.mp3" }
         ]
     },
     {
         name: "Electronic",
         audio: "assets/electronic.mp3",
         children: [
-            { name: "Calvin Harris", audio: "assets/electronic.mp3" },
-            { name: "Skrillex", audio: "assets/electronic.mp3" },
-            { name: "Deadmau5", audio: "assets/electronic.mp3" },
-            { name: "David Guetta", audio: "assets/electronic.mp3" },
-            { name: "Marshmello", audio: "assets/electronic.mp3" },
-
+            { name: "Calvin Harris", audio: "assets/calvin-harris.mp3" },
+            { name: "Skrillex", audio: "assets/skrillex.mp3" },
+            { name: "Deadmau5", audio: "assets/deadmau5.mp3" },
+            { name: "David Guetta", audio: "assets/david-guetta.mp3" },
+            { name: "Marshmello", audio: "assets/marshmello.mp3" },
             // TARGET 2: DAFT PUNK (Has Tracks)
             { 
                 name: "Daft Punk", 
-                audio: "assets/electronic.mp3", 
+                audio: "assets/daft-punk.mp3", 
                 children: [
                     { name: "Get Lucky", audio: "assets/get-lucky.mp3" },
                     { name: "Harder Better Faster", audio: "assets/harder-better-faster.mp3" },
@@ -123,22 +122,22 @@ const MUSIC_LIBRARY = [
                     { name: "Robot Rock", audio: "assets/robot-rock.mp3" }
                 ] 
             },
-            { name: "Tiesto", audio: "assets/electronic.mp3" },
-            { name: "Avicii", audio: "assets/electronic.mp3" }
+            { name: "Tiesto", audio: "assets/tiesto.mp3" },
+            { name: "Avicii", audio: "assets/avicii.mp3" }
         ]
     },
     {
         name: "Folk",
         audio: "assets/folk.mp3",
         children: [
-            { name: "Bob Dylan", audio: "assets/folk.mp3" },
-            { name: "Joni Mitchell", audio: "assets/folk.mp3" },
-            { name: "Simon & Garfunkel", audio: "assets/folk.mp3" },
-            { name: "Joan Baez", audio: "assets/folk.mp3" },
-            { name: "Neil Young", audio: "assets/folk.mp3" },
-            { name: "Crosby, Stills & Nash", audio: "assets/folk.mp3" },
-            { name: "Cat Stevens", audio: "assets/folk.mp3" },
-            { name: "Pete Seeger", audio: "assets/folk.mp3" }
+            { name: "Bob Dylan", audio: "assets/bob-dylan.mp3" },
+            { name: "Joni Mitchell", audio: "assets/joni-mitchell.mp3" },
+            { name: "Simon & Garfunkel", audio: "assets/simon-garfunkel.mp3" },
+            { name: "Joan Baez", audio: "assets/joan-baez.mp3" },
+            { name: "Neil Young", audio: "assets/neil-young.mp3" },
+            { name: "Crosby, Stills & Nash", audio: "assets/crosby-stills-nash.mp3" },
+            { name: "Cat Stevens", audio: "assets/cat-stevens.mp3" },
+            { name: "Pete Seeger", audio: "assets/pete-seeger.mp3" }
         ]
     }
 ];

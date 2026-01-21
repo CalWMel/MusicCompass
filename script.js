@@ -426,9 +426,10 @@ function setSector(newSector) {
 }
 
 function engageClutch(e) {
-
+    // 1. CRITICAL: Ignore the button so the click event can fire!
     if (e.target.closest('#btn-system-toggle')) return;
 
+    // 2. Ignore if system is suspended (unless it's the button we just checked)
     if (state.isSystemSuspended) return;
 
     if (e.cancelable) e.preventDefault(); 
@@ -436,7 +437,6 @@ function engageClutch(e) {
     // --- BRANCH 1: ALWAYS-ON MODE ---
     if (state.experimentMode === 'ALWAYS_ON') {
         const now = Date.now();
-        // FIX: Debounce to prevent double-firing (Touch + Mouse)
         if (now - state.lastTapTime < 200) return; 
         state.lastTapTime = now;
 

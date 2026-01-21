@@ -125,39 +125,68 @@ function initApp() {
     window.addEventListener('mousedown', engage);
     window.addEventListener('mouseup', disengage);
 
-    // --- NEW SYSTEM TOGGLE LOGIC ---
-    const toggleBtn = document.getElementById('btn-system-toggle');
-
     toggleBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); 
+        e.stopPropagation(); 
+        
+        state.isSystemSuspended = !state.isSystemSuspended;
+
+        if (state.isSystemSuspended) {
+            // --- GOING IDLE (STOP) ---
             
-            state.isSystemSuspended = !state.isSystemSuspended;
-
-            if (state.isSystemSuspended) {
-                // --- STOP BROWSING ---
-                stopSound(); // Silence the audio
-                
-                toggleBtn.textContent = "Resume Browsing";
-                toggleBtn.style.background = "#4CAF50"; 
-                statusDiv.textContent = "System Paused (Idle)";
-                statusDiv.style.color = "#888";
-                
-                if (navigator.vibrate) navigator.vibrate(50);
-
-            } else {
-                // --- RESUME BROWSING ---
-                toggleBtn.textContent = "Stop Browsing";
-                toggleBtn.style.background = "#ff4444"; 
-                statusDiv.textContent = "Resuming...";
-                
-                // CRITICAL FIX: Do NOT reset calibration here.
-                // Keeping 'hasCalibrated = true' means the compass remembers 
-                // where North is, so it won't snap to 0.
-                
-                // We also don't need to force playSectorSound() here manually.
-                // The next handleOrientation() event (which fires instantly) 
-                // will detect where you are pointing and play the correct sound.
+            // 1. Save current playback time so we don't restart songs
+            if (state.activeSource) {
+                 state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
             }
+
+            stopSound();
+            
+            toggleBtn.textContent = "Resume Browsing";
+            toggleBtn.style.background = "#4CAF50"; // Green
+            statusDiv.textContent = "System Paused (Idle)";
+            statusDiv.style.color = "#888";
+            
+            if (navigator.vibrate) navigator.vibrate(50);
+
+        } else {
+            // --- WAKING UP (RESUME) ---
+            toggleBtn.textContent = "Stop Browsing";
+            toggleBtn.style.background = "#ff4444"; // Red
+            
+            // 1. RESTORE CORRECT TEXT UI
+            // We check the state flags to decide what to show
+            if (state.navigationLevel === 2) {
+                // We are in Track Layer
+                const item = state.currentDataNode[state.currentSector];
+                const name = item ? item.name : "Unknown";
+                
+                if (state.isLocked) {
+                    statusDiv.textContent = `Locked: ${name}`;
+                    statusDiv.style.color = "#00FF00";
+                } else if (state.isManualPause) {
+                    statusDiv.textContent = `Paused: ${name}`;
+                    statusDiv.style.color = "yellow";
+                } else {
+                    statusDiv.textContent = `Now Playing: ${name}`;
+                    statusDiv.style.color = "#00FF00";
+                }
+            } else {
+                // We are in Genre/Artist Layer
+                if (state.experimentMode === 'ALWAYS_ON') {
+                    statusDiv.textContent = `${state.parentName}. Tap to Select.`;
+                } else {
+                    statusDiv.textContent = `${state.parentName}. Hold to Browse.`;
+                }
+                statusDiv.style.color = "#fff";
+            }
+
+            // 2. RESUME AUDIO (If allowed)
+            // CRITICAL: Do NOT play if the user had Manually Paused the track.
+            if (!state.isManualPause && state.currentSector !== -1) {
+                playSectorSound(state.currentSector, state.pauseOffset);
+            }
+            
+            // Note: We removed 'state.hasCalibrated = false' so no more jumping!
+        }
     });
 }
 

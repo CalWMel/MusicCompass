@@ -59,9 +59,26 @@
 
     <div id="ui-container" style="display:none; text-align:center;">
         <div id="status">Clutch Disengaged (Paused)</div>
-        <div>Current Sector:</div>
-        <div id="sector-display">-</div>
-        <p class="instruction">Press and HOLD screen to rotate compass.</p>
+        <div style="margin: 20px 0;">
+            <span style="color:#888; font-size:0.9rem;">CURRENT SECTOR</span><br>
+            <div id="sector-display" style="font-size:2rem; font-weight:bold;">-</div>
+        </div>
+    
+        <button id="btn-system-toggle" style="
+                padding: 15px 30px; 
+                font-size: 1.2rem; 
+                background: #ff4444; 
+                color: white; 
+                border: none; 
+                border-radius: 50px; 
+                margin-top: 30px;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+            Stop Browsing
+        </button>
+    
+        <p class="instruction" style="margin-top:20px; color:#aaa;">
+            Press button to Pause/Resume the compass.
+        </p>
     </div>
 
     <script src="data.js"></script>

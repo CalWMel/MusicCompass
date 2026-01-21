@@ -55,6 +55,7 @@ const state = {
     isBrowsing: false,
     isManualPause: false,
     isLocked: false,
+    isSystemSuspended: false,
     
     // Calibration
     hasCalibrated: false,
@@ -123,6 +124,40 @@ function initApp() {
     window.addEventListener('touchend', disengage);
     window.addEventListener('mousedown', engage);
     window.addEventListener('mouseup', disengage);
+
+    // --- NEW SYSTEM TOGGLE LOGIC ---
+    const toggleBtn = document.getElementById('btn-system-toggle');
+
+    toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent this click from triggering a "Select"
+        
+        // 1. Toggle State
+        state.isSystemSuspended = !state.isSystemSuspended;
+
+        if (state.isSystemSuspended) {
+            // --- GOING IDLE (STOP) ---
+            stopSound();
+            toggleBtn.textContent = "Resume Browsing";
+            toggleBtn.style.background = "#4CAF50"; // Green
+            statusDiv.textContent = "System Paused (Idle)";
+            statusDiv.style.color = "#888";
+            
+            // Optional: Short vibration to confirm
+            if (navigator.vibrate) navigator.vibrate(50);
+
+        } else {
+            // --- WAKING UP (START) ---
+            toggleBtn.textContent = "Stop Browsing";
+            toggleBtn.style.background = "#ff4444"; // Red
+            statusDiv.textContent = "Resuming...";
+            
+            // IMPORTANT: Recalibrate North so the user doesn't jump
+            state.hasCalibrated = false; 
+            
+            // Trigger immediate compass update
+            if (state.currentSector !== -1) playSectorSound(state.currentSector);
+        }
+    });
 }
 
 // --- AUDIO ENGINE ---
@@ -269,6 +304,9 @@ function playConfirmationSound() {
 // --- INTERACTION LOGIC ---
 
 function handleOrientation(event) {
+
+    if (state.isSystemSuspended) return; 
+    
     let alpha = event.alpha;
     if (alpha === null) return;
     let angle = 360 - alpha;
@@ -353,6 +391,9 @@ function setSector(newSector) {
 }
 
 function engageClutch(e) {
+
+    if (state.isSystemSuspended) return;
+
     if (e.cancelable) e.preventDefault(); 
     
     // --- BRANCH 1: ALWAYS-ON MODE ---

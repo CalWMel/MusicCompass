@@ -306,7 +306,7 @@ function playConfirmationSound() {
 function handleOrientation(event) {
 
     if (state.isSystemSuspended) return; 
-    
+
     let alpha = event.alpha;
     if (alpha === null) return;
     let angle = 360 - alpha;
@@ -391,6 +391,8 @@ function setSector(newSector) {
 }
 
 function engageClutch(e) {
+
+    if (e.target.closest('#btn-system-toggle')) return;
 
     if (state.isSystemSuspended) return;
 

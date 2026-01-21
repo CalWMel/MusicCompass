@@ -129,34 +129,35 @@ function initApp() {
     const toggleBtn = document.getElementById('btn-system-toggle');
 
     toggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent this click from triggering a "Select"
-        
-        // 1. Toggle State
-        state.isSystemSuspended = !state.isSystemSuspended;
+            e.stopPropagation(); 
+            
+            state.isSystemSuspended = !state.isSystemSuspended;
 
-        if (state.isSystemSuspended) {
-            // --- GOING IDLE (STOP) ---
-            stopSound();
-            toggleBtn.textContent = "Resume Browsing";
-            toggleBtn.style.background = "#4CAF50"; // Green
-            statusDiv.textContent = "System Paused (Idle)";
-            statusDiv.style.color = "#888";
-            
-            // Optional: Short vibration to confirm
-            if (navigator.vibrate) navigator.vibrate(50);
+            if (state.isSystemSuspended) {
+                // --- STOP BROWSING ---
+                stopSound(); // Silence the audio
+                
+                toggleBtn.textContent = "Resume Browsing";
+                toggleBtn.style.background = "#4CAF50"; 
+                statusDiv.textContent = "System Paused (Idle)";
+                statusDiv.style.color = "#888";
+                
+                if (navigator.vibrate) navigator.vibrate(50);
 
-        } else {
-            // --- WAKING UP (START) ---
-            toggleBtn.textContent = "Stop Browsing";
-            toggleBtn.style.background = "#ff4444"; // Red
-            statusDiv.textContent = "Resuming...";
-            
-            // IMPORTANT: Recalibrate North so the user doesn't jump
-            state.hasCalibrated = false; 
-            
-            // Trigger immediate compass update
-            if (state.currentSector !== -1) playSectorSound(state.currentSector);
-        }
+            } else {
+                // --- RESUME BROWSING ---
+                toggleBtn.textContent = "Stop Browsing";
+                toggleBtn.style.background = "#ff4444"; 
+                statusDiv.textContent = "Resuming...";
+                
+                // CRITICAL FIX: Do NOT reset calibration here.
+                // Keeping 'hasCalibrated = true' means the compass remembers 
+                // where North is, so it won't snap to 0.
+                
+                // We also don't need to force playSectorSound() here manually.
+                // The next handleOrientation() event (which fires instantly) 
+                // will detect where you are pointing and play the correct sound.
+            }
     });
 }
 

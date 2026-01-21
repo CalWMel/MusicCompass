@@ -125,15 +125,16 @@ function initApp() {
     window.addEventListener('mousedown', engage);
     window.addEventListener('mouseup', disengage);
 
-    toggleBtn.addEventListener('click', (e) => {
+toggleBtn.addEventListener('click', (e) => {
         e.stopPropagation(); 
         
+        // 1. Toggle the Master Switch
         state.isSystemSuspended = !state.isSystemSuspended;
 
         if (state.isSystemSuspended) {
-            // --- GOING IDLE (STOP) ---
+            // --- STOP BROWSING (GO IDLE) ---
             
-            // 1. Save current playback time so we don't restart songs
+            // Save time so we can resume later if locked
             if (state.activeSource) {
                  state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
             }
@@ -148,17 +149,16 @@ function initApp() {
             if (navigator.vibrate) navigator.vibrate(50);
 
         } else {
-            // --- WAKING UP (RESUME) ---
+            // --- RESUME BROWSING (WAKE UP) ---
             toggleBtn.textContent = "Stop Browsing";
             toggleBtn.style.background = "#ff4444"; // Red
             
-            // 1. RESTORE CORRECT TEXT UI
-            // We check the state flags to decide what to show
+            // A. RESTORE TEXT UI (Get the name of what we are currently facing/locked to)
+            const item = state.currentDataNode[state.currentSector];
+            const name = item ? item.name : "Unknown";
+
             if (state.navigationLevel === 2) {
-                // We are in Track Layer
-                const item = state.currentDataNode[state.currentSector];
-                const name = item ? item.name : "Unknown";
-                
+                // Track Layer
                 if (state.isLocked) {
                     statusDiv.textContent = `Locked: ${name}`;
                     statusDiv.style.color = "#00FF00";
@@ -166,29 +166,34 @@ function initApp() {
                     statusDiv.textContent = `Paused: ${name}`;
                     statusDiv.style.color = "yellow";
                 } else {
-                    statusDiv.textContent = `Now Playing: ${name}`;
-                    statusDiv.style.color = "#00FF00";
+                    // Normal Browsing: Let the sensor update the name in a millisecond
+                    statusDiv.textContent = "Locating..."; 
+                    statusDiv.style.color = "#fff";
                 }
             } else {
-                // We are in Genre/Artist Layer
-                if (state.experimentMode === 'ALWAYS_ON') {
-                    statusDiv.textContent = `${state.parentName}. Tap to Select.`;
-                } else {
-                    statusDiv.textContent = `${state.parentName}. Hold to Browse.`;
-                }
+                // Genre/Artist Layer
+                statusDiv.textContent = state.experimentMode === 'ALWAYS_ON' 
+                    ? `${state.parentName}. Tap to Select.` 
+                    : `${state.parentName}. Hold to Browse.`;
                 statusDiv.style.color = "#fff";
             }
 
-            // 2. RESUME AUDIO (If allowed)
-            // CRITICAL: Do NOT play if the user had Manually Paused the track.
-            if (!state.isManualPause && state.currentSector !== -1) {
-                playSectorSound(state.currentSector, state.pauseOffset);
+            // B. RESUME AUDIO LOGIC
+            if (state.isLocked) {
+                // Case 1: LOCKED. Resume the specific song we locked, ignoring the compass.
+                if (!state.isManualPause && state.currentSector !== -1) {
+                    playSectorSound(state.currentSector, state.pauseOffset);
+                }
+            } else {
+                // Case 2: FREE BROWSING. 
+                // Do NOT play audio here. 
+                // Why? Because we want to "continue browsing from wherever the phone is pointing".
+                // By doing nothing here, the very next 'deviceorientation' event (which fires constantly)
+                // will trigger handleOrientation() -> setSector() -> playSectorSound().
+                // This ensures we play the *new* direction immediately, not the old one.
             }
-            
-            // Note: We removed 'state.hasCalibrated = false' so no more jumping!
         }
-    });
-}
+    });}
 
 // --- AUDIO ENGINE ---
 async function initAudio() {

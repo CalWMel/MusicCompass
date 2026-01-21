@@ -106,14 +106,67 @@ function initApp() {
     startBtn.style.display = 'none';
     uiContainer.style.display = 'block';
     
-    // EXPERIMENT SETUP
+    // --- 1. SETUP MODE & BUTTON VISIBILITY ---
+    const toggleBtn = document.getElementById('btn-system-toggle');
+    
     if (state.experimentMode === 'ALWAYS_ON') {
-        state.isBrowsing = true; // Compass is active by default
+        state.isBrowsing = true; 
         statusDiv.textContent = "Always-On Mode. Tap to Select.";
+        // Show button in Always-On mode
+        if (toggleBtn) toggleBtn.style.display = 'inline-block';
     } else {
-        state.isBrowsing = false; // Wait for clutch
+        state.isBrowsing = false; 
+        // Hide button in Clutch mode
+        if (toggleBtn) toggleBtn.style.display = 'none';
     }
 
+    // --- 2. DEFINE BUTTON CLICK LOGIC ---
+    if (toggleBtn) {
+        // Remove old listeners to prevent duplicates if initApp runs twice
+        const newBtn = toggleBtn.cloneNode(true);
+        toggleBtn.parentNode.replaceChild(newBtn, toggleBtn);
+        
+        newBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Stop click from bubbling to "Select" logic
+            
+            // Toggle the Suspension State
+            state.isSystemSuspended = !state.isSystemSuspended;
+
+            if (state.isSystemSuspended) {
+                // === STOP BROWSING ===
+                stopSound();
+                newBtn.textContent = "Resume Browsing";
+                newBtn.style.backgroundColor = "#4CAF50"; // Green
+                statusDiv.textContent = "System Paused";
+                statusDiv.style.color = "#888";
+                
+                if (navigator.vibrate) navigator.vibrate(50);
+            } else {
+                // === RESUME BROWSING ===
+                newBtn.textContent = "Stop Browsing";
+                newBtn.style.backgroundColor = "#ff4444"; // Red
+                
+                // Restore Text based on context
+                if (state.navigationLevel === 2) {
+                    const item = state.currentDataNode[state.currentSector];
+                    statusDiv.textContent = `Now Playing: ${item ? item.name : 'Unknown'}`;
+                    statusDiv.style.color = "#00FF00";
+                } else {
+                    statusDiv.textContent = `${state.parentName}. Tap to Select.`;
+                    statusDiv.style.color = "#fff";
+                }
+
+                // Resume Audio immediately
+                // We let the compass logic pick up the new sector automatically
+                // but we trigger a quick check here to ensure instant feedback
+                if (state.currentSector !== -1 && !state.isManualPause) {
+                    playSectorSound(state.currentSector, state.pauseOffset);
+                }
+            }
+        });
+    }
+
+    // --- 3. ATTACH SENSOR LISTENERS ---
     window.addEventListener('deviceorientation', handleOrientation);
     window.addEventListener('devicemotion', handleShake); 
     
@@ -124,76 +177,7 @@ function initApp() {
     window.addEventListener('touchend', disengage);
     window.addEventListener('mousedown', engage);
     window.addEventListener('mouseup', disengage);
-
-toggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); 
-        
-        // 1. Toggle the Master Switch
-        state.isSystemSuspended = !state.isSystemSuspended;
-
-        if (state.isSystemSuspended) {
-            // --- STOP BROWSING (GO IDLE) ---
-            
-            // Save time so we can resume later if locked
-            if (state.activeSource) {
-                 state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
-            }
-
-            stopSound();
-            
-            toggleBtn.textContent = "Resume Browsing";
-            toggleBtn.style.background = "#4CAF50"; // Green
-            statusDiv.textContent = "System Paused (Idle)";
-            statusDiv.style.color = "#888";
-            
-            if (navigator.vibrate) navigator.vibrate(50);
-
-        } else {
-            // --- RESUME BROWSING (WAKE UP) ---
-            toggleBtn.textContent = "Stop Browsing";
-            toggleBtn.style.background = "#ff4444"; // Red
-            
-            // A. RESTORE TEXT UI (Get the name of what we are currently facing/locked to)
-            const item = state.currentDataNode[state.currentSector];
-            const name = item ? item.name : "Unknown";
-
-            if (state.navigationLevel === 2) {
-                // Track Layer
-                if (state.isLocked) {
-                    statusDiv.textContent = `Locked: ${name}`;
-                    statusDiv.style.color = "#00FF00";
-                } else if (state.isManualPause) {
-                    statusDiv.textContent = `Paused: ${name}`;
-                    statusDiv.style.color = "yellow";
-                } else {
-                    // Normal Browsing: Let the sensor update the name in a millisecond
-                    statusDiv.textContent = "Locating..."; 
-                    statusDiv.style.color = "#fff";
-                }
-            } else {
-                // Genre/Artist Layer
-                statusDiv.textContent = state.experimentMode === 'ALWAYS_ON' 
-                    ? `${state.parentName}. Tap to Select.` 
-                    : `${state.parentName}. Hold to Browse.`;
-                statusDiv.style.color = "#fff";
-            }
-
-            // B. RESUME AUDIO LOGIC
-            if (state.isLocked) {
-                // Case 1: LOCKED. Resume the specific song we locked, ignoring the compass.
-                if (!state.isManualPause && state.currentSector !== -1) {
-                    playSectorSound(state.currentSector, state.pauseOffset);
-                }
-            } else {
-                // Case 2: FREE BROWSING. 
-                // Do NOT play audio here. 
-                // Why? Because we want to "continue browsing from wherever the phone is pointing".
-                // By doing nothing here, the very next 'deviceorientation' event (which fires constantly)
-                // will trigger handleOrientation() -> setSector() -> playSectorSound().
-                // This ensures we play the *new* direction immediately, not the old one.
-            }
-        }
-    });}
+}
 
 // --- AUDIO ENGINE ---
 async function initAudio() {
@@ -426,12 +410,12 @@ function setSector(newSector) {
 }
 
 function engageClutch(e) {
-    // 1. CRITICAL: Ignore the button so the click event can fire!
+   // 1. CRITICAL: Ignore the button so the click event can fire!
     if (e.target.closest('#btn-system-toggle')) return;
 
-    // 2. Ignore if system is suspended (unless it's the button we just checked)
+    // 2. Ignore if system is suspended (so touching screen doesn't play music while paused)
     if (state.isSystemSuspended) return;
-
+    
     if (e.cancelable) e.preventDefault(); 
     
     // --- BRANCH 1: ALWAYS-ON MODE ---

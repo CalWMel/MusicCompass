@@ -103,19 +103,29 @@ startBtn.addEventListener('click', async () => {
 });
 
 function initApp() {
-    // 1. RANDOMIZE
-    console.log("Randomizing Music Library...");
-    // Check if musicData exists before using it
+    
+    // --- 1. RANDOMIZATION (With Error Checking) ---
+    console.log("Attempting to randomize...");
+    
+    // Check which data variable exists and shuffle it
     if (typeof musicData !== 'undefined') {
-        randomizeData(musicData); 
-        state.currentDataNode = musicData.children; 
-    } else {
-        console.error("Data file not loaded!");
+        randomizeData(musicData);
+        state.currentDataNode = musicData.children;
+        console.log("Randomized 'musicData'");
+    } 
+    else if (typeof MUSIC_LIBRARY !== 'undefined') {
+        randomizeData(MUSIC_LIBRARY);
+        state.currentDataNode = MUSIC_LIBRARY;
+        console.log("Randomized 'MUSIC_LIBRARY'");
+    } 
+    else {
+        console.error("CRITICAL: No music data found! Check data.js linkage.");
     }
 
-    // 2. UI SETUP
+    // --- 2. UI SETUP ---
     startBtn.style.display = 'none';
     uiContainer.style.display = 'block';
+    
     
     // --- 1. SETUP MODE & BUTTON VISIBILITY ---
     const toggleBtn = document.getElementById('btn-system-toggle');
@@ -736,7 +746,9 @@ async function goBack() {
     }
 }
 
-// --- RANDOMIZATION HELPERS ---
+// --- RANDOMIZATION HELPER FUNCTIONS ---
+// Paste this at the very bottom of script.js
+
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -745,12 +757,15 @@ function shuffleArray(array) {
 }
 
 function randomizeData(node) {
-    // If it's the Root wrapper (musicData)
+    // Safety check: if node is null/undefined, do nothing
+    if (!node) return;
+
+    // Case 1: Root Object (musicData) containing .children
     if (node.children) {
         shuffleArray(node.children);
         node.children.forEach(child => randomizeData(child));
     } 
-    // If it's an Array (MUSIC_LIBRARY)
+    // Case 2: Array (MUSIC_LIBRARY)
     else if (Array.isArray(node)) {
         shuffleArray(node);
         node.forEach(child => randomizeData(child));

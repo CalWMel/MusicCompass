@@ -103,15 +103,17 @@ startBtn.addEventListener('click', async () => {
 });
 
 function initApp() {
-    // --- NEW: RANDOMIZE LOCATIONS FOR THIS TRIAL ---
-    // This ensures that "North" is a different Genre every time you refresh.
+    // 1. RANDOMIZE
     console.log("Randomizing Music Library...");
-    randomizeData(musicData); 
-    
-    // Reset the state to point to the new shuffled structure
-    state.currentDataNode = musicData.children; 
+    // Check if musicData exists before using it
+    if (typeof musicData !== 'undefined') {
+        randomizeData(musicData); 
+        state.currentDataNode = musicData.children; 
+    } else {
+        console.error("Data file not loaded!");
+    }
 
-    // --- UI SETUP ---
+    // 2. UI SETUP
     startBtn.style.display = 'none';
     uiContainer.style.display = 'block';
     
@@ -734,9 +736,7 @@ async function goBack() {
     }
 }
 
-// --- RANDOMIZATION LOGIC ---
-
-// 1. Standard Fisher-Yates Shuffle for an array
+// --- RANDOMIZATION HELPERS ---
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -744,13 +744,15 @@ function shuffleArray(array) {
     }
 }
 
-// 2. Recursive function to shuffle the entire library (Genre -> Artist -> Tracks)
 function randomizeData(node) {
+    // If it's the Root wrapper (musicData)
     if (node.children) {
-        // Shuffle the current level (e.g., rearrange the Genres)
         shuffleArray(node.children);
-        
-        // Go deeper and shuffle the children of these items (e.g., rearrange Artists within Genre)
         node.children.forEach(child => randomizeData(child));
+    } 
+    // If it's an Array (MUSIC_LIBRARY)
+    else if (Array.isArray(node)) {
+        shuffleArray(node);
+        node.forEach(child => randomizeData(child));
     }
 }

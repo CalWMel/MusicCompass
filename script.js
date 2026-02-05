@@ -91,21 +91,8 @@ startBtn.addEventListener('click', async () => {
     // Hide the setup controls
     document.getElementById('setup-controls').style.display = 'none';
 
-    await initAudio();
-    if (typeof DeviceOrientationEvent !== 'undefined' && 
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-        try {
-            const permission = await DeviceOrientationEvent.requestPermission();
-            if (permission === 'granted') initApp();
-            else alert("Permission denied.");
-        } catch (error) { initApp(); }
-    } else { initApp(); }
-});
-
-function initApp() {
-    
-    // --- 1. RANDOMIZATION (With Error Checking) ---
-    console.log("Attempting to randomize...");
+    // --- CRITICAL FIX: RANDOMIZE BEFORE LOADING AUDIO ---
+    console.log("Randomizing Music Library...");
     
     // Check which data variable exists and shuffle it
     if (typeof musicData !== 'undefined') {
@@ -117,71 +104,105 @@ function initApp() {
         randomizeData(MUSIC_LIBRARY);
         state.currentDataNode = MUSIC_LIBRARY;
         console.log("Randomized 'MUSIC_LIBRARY'");
-    } 
-    else {
-        console.error("CRITICAL: No music data found! Check data.js linkage.");
     }
 
-    // --- 2. UI SETUP ---
+    // 2. NOW LOAD AUDIO (It will use the shuffled order)
+    await initAudio();
+
+    // 3. START SENSORS
+    if (typeof DeviceOrientationEvent !== 'undefined' && 
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+            const permission = await DeviceOrientationEvent.requestPermission();
+            if (permission === 'granted') initApp();
+            else alert("Permission denied.");
+        } catch (error) { initApp(); }
+    } else { initApp(); }
+});
+
+function initApp() {
+    // --- UI SETUP ---
     startBtn.style.display = 'none';
     uiContainer.style.display = 'block';
     
-    
+    // Note: Randomization has already happened in the Start Button handler.
+    // Do NOT call randomizeData() here.
+
     // --- 1. SETUP MODE & BUTTON VISIBILITY ---
     const toggleBtn = document.getElementById('btn-system-toggle');
     
     if (state.experimentMode === 'ALWAYS_ON') {
         state.isBrowsing = true; 
         statusDiv.textContent = "Always-On Mode. Tap to Select.";
-        // Show button in Always-On mode
         if (toggleBtn) toggleBtn.style.display = 'inline-block';
     } else {
         state.isBrowsing = false; 
-        // Hide button in Clutch mode
         if (toggleBtn) toggleBtn.style.display = 'none';
     }
 
     // --- 2. DEFINE BUTTON CLICK LOGIC (Hardened) ---
     if (toggleBtn) {
-        // Remove old listeners to prevent duplicates if initApp runs twice
+        // Remove old listeners to prevent duplicates
         const newBtn = toggleBtn.cloneNode(true);
         toggleBtn.parentNode.replaceChild(newBtn, toggleBtn);
         
+        let lastToggleTime = 0; 
+
         newBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); // Stop click from bubbling to "Select" logic
+            e.stopPropagation(); 
             
-            // Toggle the Suspension State
+            const now = Date.now();
+            if (now - lastToggleTime < 500) return;
+            lastToggleTime = now;
+            
             state.isSystemSuspended = !state.isSystemSuspended;
 
             if (state.isSystemSuspended) {
                 // === STOP BROWSING ===
+                if (state.activeSource && state.audioContext) {
+                     state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
+                }
                 stopSound();
+                
                 newBtn.textContent = "Resume Browsing";
                 newBtn.style.backgroundColor = "#4CAF50"; // Green
-                statusDiv.textContent = "System Paused";
+                statusDiv.textContent = "System Paused (Idle)";
                 statusDiv.style.color = "#888";
                 
                 if (navigator.vibrate) navigator.vibrate(50);
+
             } else {
                 // === RESUME BROWSING ===
                 newBtn.textContent = "Stop Browsing";
                 newBtn.style.backgroundColor = "#ff4444"; // Red
                 
-                // Restore Text based on context
+                state.isManualPause = false; 
+
+                // RESTORE CORRECT UI TEXT
+                const item = state.currentDataNode[state.currentSector];
+                const name = item ? item.name : "Unknown";
+
                 if (state.navigationLevel === 2) {
-                    const item = state.currentDataNode[state.currentSector];
-                    statusDiv.textContent = `Now Playing: ${item ? item.name : 'Unknown'}`;
-                    statusDiv.style.color = "#00FF00";
+                    if (state.isLocked) {
+                        statusDiv.textContent = `Locked: ${name}`;
+                        statusDiv.style.color = "#00FF00";
+                    } else {
+                        statusDiv.textContent = "Locating..."; 
+                        statusDiv.style.color = "#fff";
+                    }
                 } else {
-                    statusDiv.textContent = `${state.parentName}. Tap to Select.`;
+                    statusDiv.textContent = state.experimentMode === 'ALWAYS_ON' 
+                        ? `${state.parentName}. Tap to Select.` 
+                        : `${state.parentName}. Hold to Browse.`;
                     statusDiv.style.color = "#fff";
                 }
 
-                // Resume Audio immediately
-                // We let the compass logic pick up the new sector automatically
-                // but we trigger a quick check here to ensure instant feedback
-                if (state.currentSector !== -1 && !state.isManualPause) {
-                    playSectorSound(state.currentSector, state.pauseOffset);
+                if (state.isLocked) {
+                    if (state.currentSector !== -1) {
+                        playSectorSound(state.currentSector, state.pauseOffset);
+                    }
+                } else {
+                    state.currentSector = -1;
                 }
             }
         });

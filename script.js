@@ -410,25 +410,29 @@ function setSector(newSector) {
 }
 
 function engageClutch(e) {
-   // 1. CRITICAL: Ignore the button so the click event can fire!
+    // 1. IGNORE THE BUTTON (Let the click happen normally)
     if (e.target.closest('#btn-system-toggle')) return;
 
-    // 2. Ignore if system is suspended (so touching screen doesn't play music while paused)
+    // 2. PREVENT GHOST CLICKS
+    // If this is a touch event on the background, kill it so it doesn't 
+    // turn into a mouse event later.
+    if (e.cancelable) e.preventDefault();
+
+    // 3. Ignore if system is suspended
     if (state.isSystemSuspended) return;
-    
-    if (e.cancelable) e.preventDefault(); 
-    
+
     // --- BRANCH 1: ALWAYS-ON MODE ---
     if (state.experimentMode === 'ALWAYS_ON') {
         const now = Date.now();
-        if (now - state.lastTapTime < 200) return; 
+        // Increased debounce to 300ms to be safe against slow taps
+        if (now - state.lastTapTime < 300) return; 
         state.lastTapTime = now;
 
         handleSelection();
         return;
     }
 
-    // --- BRANCH 2: CLUTCH MODE (Original Logic) ---
+    // --- BRANCH 2: CLUTCH MODE ---
     state.touchStartTime = Date.now();
     state.isClutched = true;
     state.isBrowsing = false; 
@@ -654,8 +658,19 @@ function handleShake(event) {
             // UNLOCK Action
             state.isLocked = false;
             state.isManualPause = false;
-            playSectorSound(state.currentSector); // Restart audio tracking
-            statusDiv.textContent = "Unlocked. Tilt to Browse.";
+            
+            // --- CRITICAL FIX START ---
+            if (state.experimentMode === 'ALWAYS_ON') {
+                // Always-On: Resume playing immediately
+                playSectorSound(state.currentSector); 
+                statusDiv.textContent = "Unlocked. Tilt to Browse.";
+            } else {
+                // Clutch Mode: STOP playing. User must hold screen to resume.
+                stopSound();
+                statusDiv.textContent = "Unlocked. Hold to Browse.";
+            }
+            // --- CRITICAL FIX END ---
+
             statusDiv.style.color = "#fff";
             if (navigator.vibrate) navigator.vibrate([50, 50]);
         } else {

@@ -431,21 +431,22 @@ function calculateSector(angle) {
 }
 
 function setSector(newSector) {
-    // FIX: Hard Lock. If locked, ignore all compass movement.
-    // This keeps the song playing even if you turn 180 degrees.
+    // 1. If Locked, ignore compass changes
     if (state.isLocked) return;
 
-    // (Keep the isManualPause check if you want, but isLocked covers it)
-    if (state.isManualPause) return;
-
+    // 2. Only update if the sector actually changed
     if (state.currentSector !== newSector) {
         state.currentSector = newSector;
         
         const item = state.currentDataNode[newSector];
         const name = item ? item.name : "Empty";
         
-        sectorDiv.textContent = `${newSector} (${name})`;
+        // --- CHANGED HERE ---
+        // Old: sectorDiv.textContent = `${newSector} (${name})`;
+        // New: Just show the name
+        sectorDiv.textContent = name;
         
+        // 3. Feedback
         if (navigator.vibrate) navigator.vibrate(15);
         playSectorSound(newSector);
     }

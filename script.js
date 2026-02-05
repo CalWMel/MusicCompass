@@ -724,3 +724,24 @@ async function goBack() {
         }
     }
 }
+
+// --- RANDOMIZATION LOGIC ---
+
+// 1. Standard Fisher-Yates Shuffle for an array
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+}
+
+// 2. Recursive function to shuffle the entire library (Genre -> Artist -> Tracks)
+function randomizeData(node) {
+    if (node.children) {
+        // Shuffle the current level (e.g., rearrange the Genres)
+        shuffleArray(node.children);
+        
+        // Go deeper and shuffle the children of these items (e.g., rearrange Artists within Genre)
+        node.children.forEach(child => randomizeData(child));
+    }
+}

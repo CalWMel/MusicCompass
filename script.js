@@ -103,6 +103,15 @@ startBtn.addEventListener('click', async () => {
 });
 
 function initApp() {
+    // --- NEW: RANDOMIZE LOCATIONS FOR THIS TRIAL ---
+    // This ensures that "North" is a different Genre every time you refresh.
+    console.log("Randomizing Music Library...");
+    randomizeData(musicData); 
+    
+    // Reset the state to point to the new shuffled structure
+    state.currentDataNode = musicData.children; 
+
+    // --- UI SETUP ---
     startBtn.style.display = 'none';
     uiContainer.style.display = 'block';
     
@@ -120,7 +129,7 @@ function initApp() {
         if (toggleBtn) toggleBtn.style.display = 'none';
     }
 
-    // --- 2. DEFINE BUTTON CLICK LOGIC ---
+    // --- 2. DEFINE BUTTON CLICK LOGIC (Hardened) ---
     if (toggleBtn) {
         // Remove old listeners to prevent duplicates if initApp runs twice
         const newBtn = toggleBtn.cloneNode(true);

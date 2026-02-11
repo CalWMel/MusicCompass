@@ -1,5 +1,5 @@
 // --- MOBILE DEBUGGING CONSOLE ---
-(function() {
+(function () {
     var debugDiv = document.createElement('div');
     debugDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:150px; background:rgba(0,0,0,0.8); color:#0f0; font-family:monospace; font-size:12px; overflow-y:scroll; z-index:9999; pointer-events:none; padding:5px;';
     document.body.appendChild(debugDiv);
@@ -13,16 +13,16 @@
     }
 
     var oldLog = console.log;
-    console.log = function(msg) { logToScreen(msg); oldLog.apply(console, arguments); };
+    console.log = function (msg) { logToScreen(msg); oldLog.apply(console, arguments); };
 
     var oldError = console.error;
-    console.error = function(msg) { logToScreen(msg, '#ff4444'); oldError.apply(console, arguments); };
+    console.error = function (msg) { logToScreen(msg, '#ff4444'); oldError.apply(console, arguments); };
 })();
 
 // --- CONFIGURATION ---
 const SECTOR_COUNT = 8;
-const SECTOR_SIZE = 360 / SECTOR_COUNT; 
-const HYSTERESIS_THRESHOLD = 8; 
+const SECTOR_SIZE = 360 / SECTOR_COUNT;
+const HYSTERESIS_THRESHOLD = 8;
 const SELECT_SOUND_FILE = 'assets/select.mp3';
 const BACK_SOUND_FILE = 'assets/back.mp3';
 const ERROR_SOUND_FILE = 'assets/error.mp3';
@@ -35,15 +35,15 @@ const state = {
 
     // Audio Engine
     audioContext: null,
-    currentBufferSet: [], 
+    currentBufferSet: [],
     bufferCache: {},
     selectBuffer: null,
     backBuffer: null,
     isAudioInitialized: false,
-    
+
     // Navigation State
     navigationLevel: 0,
-    currentDataNode: MUSIC_LIBRARY, 
+    currentDataNode: MUSIC_LIBRARY,
     parentName: "Library",
     historyStack: [],
 
@@ -56,12 +56,12 @@ const state = {
     isManualPause: false,
     isLocked: false,
     isSystemSuspended: false,
-    
+
     // Calibration
     hasCalibrated: false,
     lastRawAngle: 0,
     calibratedOffset: 0,
-    
+
     // Playback
     activeSource: null,
     activeGain: null,
@@ -72,19 +72,19 @@ const state = {
     pausedSector: -1,
 
     // New Flags
-    isLoading: false,  
+    isLoading: false,
     lastTapTime: 0,
     isModalOpen: false,
 
     // Evaluation Config
     taskMode: 'FAMILIARIZATION', // 'ARTIST', 'TRACK_MJ_DP'
     obscureScreen: false,
-    
+
     // Evaluation Runtime
     currentTarget: null,
     taskStartTime: 0,
     isTaskActive: false,
-    timerInterval: null    
+    timerInterval: null
 };
 
 // --- DOM ELEMENTS ---
@@ -94,7 +94,7 @@ const sectorDiv = document.getElementById('sector-display');
 
 // --- INITIALIZATION ---
 // Ensure we are grabbing the correct new button ID
-const startBtn = document.getElementById('btn-start'); 
+const startBtn = document.getElementById('btn-start');
 
 startBtn.addEventListener('click', async () => {
     // 1. CAPTURE SETTINGS
@@ -105,7 +105,7 @@ startBtn.addEventListener('click', async () => {
     if (modeSelect) state.experimentMode = modeSelect.value;
     if (taskSelect) state.taskMode = taskSelect.value;
     if (visionToggle) state.obscureScreen = visionToggle.checked;
-    
+
     // 2. HIDE SETUP CONTROLS (The critical part)
     const setupDiv = document.getElementById('setup-controls');
     if (setupDiv) setupDiv.style.display = 'none';
@@ -113,15 +113,15 @@ startBtn.addEventListener('click', async () => {
     // 3. APPLY SCREEN BLUR IF REQUESTED
     const ui = document.getElementById('ui-container');
     if (state.obscureScreen && ui) {
-        ui.style.filter = "blur(8px)"; 
+        ui.style.filter = "blur(8px)";
         ui.style.opacity = "0.6";
     }
 
     // 4. RANDOMIZE & LOAD AUDIO
     console.log("Starting... Randomizing Data");
     if (typeof musicData !== 'undefined') {
-        randomizeData(musicData); 
-        state.currentDataNode = musicData.children; 
+        randomizeData(musicData);
+        state.currentDataNode = musicData.children;
     } else if (typeof MUSIC_LIBRARY !== 'undefined') {
         randomizeData(MUSIC_LIBRARY);
         state.currentDataNode = MUSIC_LIBRARY;
@@ -130,18 +130,18 @@ startBtn.addEventListener('click', async () => {
     await initAudio();
 
     // 5. START SENSORS
-    if (typeof DeviceOrientationEvent !== 'undefined' && 
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
             const permission = await DeviceOrientationEvent.requestPermission();
             if (permission === 'granted') initApp();
             else alert("Permission denied. App may not work.");
-        } catch (error) { 
+        } catch (error) {
             console.error(error);
-            initApp(); 
+            initApp();
         }
-    } else { 
-        initApp(); 
+    } else {
+        initApp();
     }
 });
 
@@ -149,9 +149,9 @@ function initApp() {
     // --- UI SETUP ---
     startBtn.style.display = 'none';
     uiContainer.style.display = 'block';
-    
+
     // Note: Randomization has already happened in the Start Button handler.
-    
+
     // --- TRIGGER FIRST TASK (Updated for Pre-Task Modal) ---
     // We wait 1 second to let the audio engine settle, then trigger the preparation logic.
     setTimeout(() => {
@@ -160,17 +160,17 @@ function initApp() {
         } else {
             console.warn("Evaluation logic (prepareNextTask) not found.");
         }
-    }, 1000); 
+    }, 1000);
 
     // --- 1. SETUP MODE & BUTTON VISIBILITY ---
     const toggleBtn = document.getElementById('btn-system-toggle');
-    
+
     if (state.experimentMode === 'ALWAYS_ON') {
-        state.isBrowsing = true; 
+        state.isBrowsing = true;
         statusDiv.textContent = "Always-On Mode. Tap to Select.";
         if (toggleBtn) toggleBtn.style.display = 'inline-block';
     } else {
-        state.isBrowsing = false; 
+        state.isBrowsing = false;
         if (toggleBtn) toggleBtn.style.display = 'none';
     }
 
@@ -179,47 +179,47 @@ function initApp() {
         // Remove old listeners to prevent duplicates
         const newBtn = toggleBtn.cloneNode(true);
         toggleBtn.parentNode.replaceChild(newBtn, toggleBtn);
-        
-        let lastToggleTime = 0; 
+
+        let lastToggleTime = 0;
 
         newBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); 
-            
+            e.stopPropagation();
+
             const now = Date.now();
             if (now - lastToggleTime < 500) return;
             lastToggleTime = now;
-            
+
             state.isSystemSuspended = !state.isSystemSuspended;
 
             if (state.isSystemSuspended) {
                 // === STOP BROWSING ===
                 if (state.activeSource && state.audioContext) {
-                     state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
+                    state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
                 }
                 stopSound();
-                
+
                 // Pause timer if active so user isn't penalized for taking a break
-                if (state.timerInterval) clearInterval(state.timerInterval); 
+                if (state.timerInterval) clearInterval(state.timerInterval);
 
                 newBtn.textContent = "Resume Browsing";
                 newBtn.style.backgroundColor = "#4CAF50"; // Green
                 statusDiv.textContent = "System Paused (Idle)";
                 statusDiv.style.color = "#888";
-                
+
                 if (navigator.vibrate) navigator.vibrate(50);
 
             } else {
                 // === RESUME BROWSING ===
                 newBtn.textContent = "Stop Browsing";
                 newBtn.style.backgroundColor = "#ff4444"; // Red
-                
-                state.isManualPause = false; 
+
+                state.isManualPause = false;
 
                 // Resume timer if a task is currently active
                 if (state.isTaskActive) {
                     state.timerInterval = setInterval(() => {
-                       const elapsed = (Date.now() - state.taskStartTime) / 1000;
-                       document.getElementById('timer-display').textContent = elapsed.toFixed(1) + "s";
+                        const elapsed = (Date.now() - state.taskStartTime) / 1000;
+                        document.getElementById('timer-display').textContent = elapsed.toFixed(1) + "s";
                     }, 100);
                 }
 
@@ -232,12 +232,12 @@ function initApp() {
                         statusDiv.textContent = `Locked: ${name}`;
                         statusDiv.style.color = "#00FF00";
                     } else {
-                        statusDiv.textContent = "Locating..."; 
+                        statusDiv.textContent = "Locating...";
                         statusDiv.style.color = "#fff";
                     }
                 } else {
-                    statusDiv.textContent = state.experimentMode === 'ALWAYS_ON' 
-                        ? `${state.parentName}. Tap to Select.` 
+                    statusDiv.textContent = state.experimentMode === 'ALWAYS_ON'
+                        ? `${state.parentName}. Tap to Select.`
                         : `${state.parentName}. Hold to Browse.`;
                     statusDiv.style.color = "#fff";
                 }
@@ -255,12 +255,12 @@ function initApp() {
 
     // --- 3. ATTACH SENSOR LISTENERS ---
     window.addEventListener('deviceorientation', handleOrientation);
-    window.addEventListener('devicemotion', handleShake); 
-    
+    window.addEventListener('devicemotion', handleShake);
+
     const engage = (e) => engageClutch(e);
     const disengage = (e) => disengageClutch(e);
 
-    window.addEventListener('touchstart', engage, {passive: false});
+    window.addEventListener('touchstart', engage, { passive: false });
     window.addEventListener('touchend', disengage);
     window.addEventListener('mousedown', engage);
     window.addEventListener('mouseup', disengage);
@@ -273,13 +273,13 @@ async function initAudio() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     state.audioContext = new AudioContext({ latencyHint: 'interactive' });
     if (state.audioContext.state === 'suspended') state.audioContext.resume();
-    
+
     statusDiv.textContent = "Loading Audio...";
-    
+
     // Initial Load: Load Level 0 (Genres)
     await loadCurrentLevelBuffers();
     await loadSelectSound();
-    
+
     statusDiv.textContent = "Ready. Hold to Browse.";
     state.isAudioInitialized = true;
 }
@@ -295,7 +295,7 @@ async function getAudioBuffer(url) {
         const response = await fetch(url);
         const arrayBuffer = await response.arrayBuffer();
         const decodedBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
-        
+
         // 3. Save it for next time
         state.bufferCache[url] = decodedBuffer;
         return decodedBuffer;
@@ -311,7 +311,7 @@ async function loadCurrentLevelBuffers() {
         // Use the new helper function instead of raw fetch
         return await getAudioBuffer(item.audio);
     });
-    
+
     state.currentBufferSet = await Promise.all(promises);
 }
 
@@ -331,8 +331,8 @@ async function loadSelectSound() {
         response = await fetch(ERROR_SOUND_FILE);
         arrayBuffer = await response.arrayBuffer();
         state.errorBuffer = await state.audioContext.decodeAudioData(arrayBuffer);
-        
-        console.log("UI Sounds Loaded"); 
+
+        console.log("UI Sounds Loaded");
     } catch (err) {
         console.error("UI sounds missing or failed to decode", err);
     }
@@ -342,12 +342,12 @@ function playSectorSound(sectorIndex, startOffset = 0) {
 
     if (state.isLoading || !state.audioContext || !state.currentBufferSet[sectorIndex]) return;
 
-    stopSound(); 
+    stopSound();
 
     const ctx = state.audioContext;
     const source = ctx.createBufferSource();
     source.buffer = state.currentBufferSet[sectorIndex];
-    
+
     state.playbackStartTime = ctx.currentTime - startOffset;
 
     if (state.navigationLevel === 0) {
@@ -359,7 +359,7 @@ function playSectorSound(sectorIndex, startOffset = 0) {
     const panner = ctx.createPanner();
     panner.panningModel = 'equalpower';
     panner.distanceModel = 'inverse';
-    
+
     const angleRad = (sectorIndex * SECTOR_SIZE) * (Math.PI / 180);
     const x = Math.sin(angleRad) * 3;
     const z = -Math.cos(angleRad) * 3;
@@ -372,9 +372,9 @@ function playSectorSound(sectorIndex, startOffset = 0) {
     source.connect(panner);
     panner.connect(gainNode);
     gainNode.connect(ctx.destination);
-    
-    source.start(0, startOffset); 
-    
+
+    source.start(0, startOffset);
+
     state.activeSource = source;
     state.activeGain = gainNode;
 }
@@ -384,11 +384,11 @@ function stopSound() {
         const oldSource = state.activeSource;
         const oldGain = state.activeGain;
         const ctx = state.audioContext;
-        
+
         oldGain.gain.cancelScheduledValues(ctx.currentTime);
         oldGain.gain.setValueAtTime(oldGain.gain.value, ctx.currentTime);
         oldGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
-        
+
         setTimeout(() => { oldSource.stop(); oldSource.disconnect(); }, 150);
         state.activeSource = null;
         state.activeGain = null;
@@ -412,7 +412,7 @@ function playConfirmationSound() {
 function handleOrientation(event) {
 
     if (state.isModalOpen) return;
-    if (state.isSystemSuspended) return; 
+    if (state.isSystemSuspended) return;
 
     let alpha = event.alpha;
     if (alpha === null) return;
@@ -430,7 +430,7 @@ function handleOrientation(event) {
         }
     }
 
-    if (!state.isBrowsing) return; 
+    if (!state.isBrowsing) return;
 
     let calibratedAngle = angle - state.calibratedOffset;
     if (calibratedAngle < 0) calibratedAngle += 360;
@@ -445,7 +445,7 @@ function updateListener(angle) {
     const rad = angle * (Math.PI / 180);
     const x = Math.sin(rad);
     const z = -Math.cos(rad);
-    
+
     const listener = state.audioContext.listener;
     if (listener.forwardX) {
         listener.forwardX.value = x;
@@ -458,7 +458,7 @@ function updateListener(angle) {
 
 function calculateSector(angle) {
     const rawSector = Math.floor(angle / SECTOR_SIZE) % SECTOR_COUNT;
-    
+
     if (state.currentSector === -1) {
         setSector(rawSector);
         return;
@@ -483,15 +483,15 @@ function setSector(newSector) {
     // 2. Only update if the sector actually changed
     if (state.currentSector !== newSector) {
         state.currentSector = newSector;
-        
+
         const item = state.currentDataNode[newSector];
         const name = item ? item.name : "Empty";
-        
+
         // --- CHANGED HERE ---
         // Old: sectorDiv.textContent = `${newSector} (${name})`;
         // New: Just show the name
         sectorDiv.textContent = name;
-        
+
         // 3. Feedback
         if (navigator.vibrate) navigator.vibrate(15);
         playSectorSound(newSector);
@@ -518,7 +518,7 @@ function engageClutch(e) {
     if (state.experimentMode === 'ALWAYS_ON') {
         const now = Date.now();
         // Increased debounce to 300ms to be safe against slow taps
-        if (now - state.lastTapTime < 300) return; 
+        if (now - state.lastTapTime < 300) return;
         state.lastTapTime = now;
 
         handleSelection();
@@ -528,7 +528,7 @@ function engageClutch(e) {
     // --- BRANCH 2: CLUTCH MODE ---
     state.touchStartTime = Date.now();
     state.isClutched = true;
-    state.isBrowsing = false; 
+    state.isBrowsing = false;
 
     if (!state.hasCalibrated) {
         state.calibratedOffset = state.lastRawAngle;
@@ -536,15 +536,15 @@ function engageClutch(e) {
     }
 
     if (state.clutchDebounce) clearTimeout(state.clutchDebounce);
-    
+
     state.clutchDebounce = setTimeout(() => {
         if (state.isClutched) {
-            state.isBrowsing = true; 
+            state.isBrowsing = true;
             statusDiv.textContent = `Browsing ${state.parentName}...`;
             statusDiv.style.color = "#4CAF50";
             if (state.currentSector !== -1) playSectorSound(state.currentSector);
         }
-    }, 200); 
+    }, 200);
 }
 
 function disengageClutch(e) {
@@ -555,7 +555,7 @@ function disengageClutch(e) {
 
     // --- BRANCH 2: CLUTCH MODE (Original Logic) ---
     state.isClutched = false;
-    state.isBrowsing = false; 
+    state.isBrowsing = false;
 
     if (state.clutchDebounce) {
         clearTimeout(state.clutchDebounce);
@@ -568,8 +568,8 @@ function disengageClutch(e) {
         handleSelection();
     } else {
         if (state.navigationLevel === 2) {
-             statusDiv.textContent = "Playing... (Tap to Pause)";
-             statusDiv.style.color = "#00FF00";
+            statusDiv.textContent = "Playing... (Tap to Pause)";
+            statusDiv.style.color = "#00FF00";
         } else {
             statusDiv.textContent = "Paused";
             statusDiv.style.color = "#fff";
@@ -591,27 +591,27 @@ async function handleSelection() {
 
     // SCENARIO 1: DRILL DOWN (Genres/Artists)
     if (currentFacingItem.children && currentFacingItem.children.length > 0) {
-        stopSound(); 
-        state.isManualPause = false; 
-        state.isLocked = false; 
-        
+        stopSound();
+        state.isManualPause = false;
+        state.isLocked = false;
+
         statusDiv.textContent = `Selected: ${currentFacingItem.name}`;
         statusDiv.style.color = "cyan";
         playConfirmationSound();
         if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-        
+
         enterLevel(currentFacingItem.children, currentFacingItem.name);
         return;
-    } 
-    
+    }
+
     // SCENARIO 2: TRACK LAYER (Lock / Pause / Resume)
     if (state.navigationLevel === 2) {
-        
+
         // --- A. IF BROWSING -> LOCK IT ---
         if (!state.isLocked) {
             state.isLocked = true; // FREEZE COMPASS
             state.isManualPause = false;
-            
+
             // --- ALSO CHECK SUCCESS HERE ---
             // Users might "Lock" the target to signal they found it
             if (typeof checkSuccess === 'function') {
@@ -672,7 +672,7 @@ async function enterLevel(newData, title) {
     state.isLoading = true; // Prevent compass from triggering sounds during load
     state.currentBufferSet = []; // Clear old buffers (Fixes "Ghost Audio")
     state.currentSector = -1; // Reset sector
-    
+
     state.historyStack.push({
         node: state.currentDataNode,
         name: state.parentName,
@@ -684,18 +684,18 @@ async function enterLevel(newData, title) {
     state.parentName = title;
 
     statusDiv.textContent = `Loading ${title}...`;
-    
+
     // 2. LOAD
     await loadCurrentLevelBuffers();
-    
+
     // 3. UNLOCK & RESTART
     state.isLoading = false;
-    
+
     // FIX: Force the compass to "re-discover" the sector.
     // By resetting to -1 AFTER load, the next compass update triggers a "change",
     // causing the new track to start playing immediately.
-    state.currentSector = -1; 
-    
+    state.currentSector = -1;
+
     if (state.experimentMode === 'ALWAYS_ON') {
         statusDiv.textContent = `${title}. Tap to Select.`;
     } else {
@@ -716,7 +716,7 @@ function handleShake(event) {
     if (!current) return;
 
     const now = Date.now();
-    
+
     // 1. GLOBAL COOLDOWN (2s)
     if ((now - debounceTimer) < 2000) return;
 
@@ -735,7 +735,7 @@ function handleShake(event) {
     const threshold = event.acceleration ? 6 : 15;
 
     if ((deltaX + deltaY) > threshold) {
-        
+
         const timeSinceLastShake = now - lastShakeTime;
 
         // A. NOISE FILTER (100ms)
@@ -756,17 +756,17 @@ function handleShake(event) {
 
     // 4. TRIGGER ACTION
     if (shakeCount >= 3) {
-        
+
         // NEW: Check if we are locked first
         if (state.isLocked) {
             // UNLOCK Action
             state.isLocked = false;
             state.isManualPause = false;
-            
+
             // --- CRITICAL FIX START ---
             if (state.experimentMode === 'ALWAYS_ON') {
                 // Always-On: Resume playing immediately
-                playSectorSound(state.currentSector); 
+                playSectorSound(state.currentSector);
                 statusDiv.textContent = "Unlocked. Tilt to Browse.";
             } else {
                 // Clutch Mode: STOP playing. User must hold screen to resume.
@@ -781,9 +781,9 @@ function handleShake(event) {
             // Standard Back Action
             goBack();
         }
-        
+
         shakeCount = 0;
-        debounceTimer = now; 
+        debounceTimer = now;
     }
 }
 
@@ -804,8 +804,8 @@ async function goBack() {
 
         // --- NEW: Reset Logic Flags ---
         // Ensure we aren't paused or locked when we arrive at the previous level
-        state.isManualPause = false; 
-        state.isLocked = false;      
+        state.isManualPause = false;
+        state.isLocked = false;
 
         // 1. Pop the previous state
         const previousState = state.historyStack.pop();
@@ -819,7 +819,7 @@ async function goBack() {
         // 3. Reload Audio for that level
         statusDiv.textContent = `Returning to ${state.parentName}...`;
         await loadCurrentLevelBuffers();
-        
+
         // --- UPDATED: Show correct instruction based on Mode ---
         if (state.experimentMode === 'ALWAYS_ON') {
             statusDiv.textContent = `${state.parentName}. Tap to Select.`;
@@ -847,7 +847,7 @@ function randomizeData(node) {
     if (node.children) {
         shuffleArray(node.children);
         node.children.forEach(child => randomizeData(child));
-    } 
+    }
     // Case 2: Array (MUSIC_LIBRARY)
     else if (Array.isArray(node)) {
         shuffleArray(node);
@@ -866,24 +866,47 @@ function prepareNextTask() {
         document.getElementById('target-display').textContent = "Free Play (No Target)";
         document.getElementById('target-display').style.color = "#aaa";
         const modal = document.getElementById('task-modal');
-        if(modal) modal.style.display = 'none';
+        if (modal) modal.style.display = 'none';
         state.isModalOpen = false;
         return;
     }
 
-    // --- 2. PICK THE TARGET (FIXED) ---
-    let targetName = "Any Song"; 
-    
-    // A. FIND THE GLOBAL ROOT (Ignore current navigation level)
-    let libraryRoot = null;
-    if (typeof musicData !== 'undefined' && musicData.children) {
-        libraryRoot = musicData.children; // Access the main list
+    // ============================================================
+    // NEW: SILENT RESET & RANDOMIZE
+    // ============================================================
+    // 1. Reset Navigation State to Top
+    state.navigationPath = [];
+    state.navigationLevel = 0;
+    state.currentSector = -1;
+    state.isLocked = false;
+    state.isManualPause = false;
+
+    // 2. Reset Data Source to Library Root
+    if (typeof musicData !== 'undefined') {
+        state.currentDataNode = musicData.children;
     } else if (typeof MUSIC_LIBRARY !== 'undefined') {
-        libraryRoot = MUSIC_LIBRARY;
-    } else {
-        // Emergency fallback
-        libraryRoot = state.currentDataNode;
+        state.currentDataNode = MUSIC_LIBRARY;
     }
+
+    // 3. Re-Shuffle the Library (Prevents memory cheating)
+    console.log("Reshuffling Data for next trial...");
+    randomizeData(state.currentDataNode);
+
+    // 4. Update Status Text (So it's correct when curtain lifts)
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) {
+        statusDiv.textContent = state.experimentMode === 'ALWAYS_ON'
+            ? "Genres. Tap to Select."
+            : "Genres. Hold to Browse.";
+        statusDiv.style.color = "#fff";
+    }
+    // ============================================================
+
+
+    // --- 2. PICK THE TARGET ---
+    let targetName = "Any Song";
+
+    let libraryRoot = state.currentDataNode; // Use our newly reset root
 
     // B. PERFORM SELECTION ON GLOBAL ROOT
     if (!libraryRoot || !Array.isArray(libraryRoot)) {
@@ -897,14 +920,13 @@ function prepareNextTask() {
                     const randomArtist = randomGenre.children[Math.floor(Math.random() * randomGenre.children.length)];
                     targetName = randomArtist.name;
                 } else {
-                    targetName = "Retry Task"; 
+                    targetName = "Retry Task";
                 }
-            } 
+            }
             // MODE B: FIND SPECIFIC TRACK (MJ / DAFT PUNK)
             else if (state.taskMode === 'TRACK_MJ_DP') {
                 const potentialArtists = [];
-                
-                // Search the FULL libraryRoot
+
                 libraryRoot.forEach(genre => {
                     if (genre.children) {
                         genre.children.forEach(artist => {
@@ -925,7 +947,7 @@ function prepareNextTask() {
                         targetName = chosenArtist.name;
                     }
                 } else {
-                    targetName = "Michael Jackson"; 
+                    targetName = "Michael Jackson";
                 }
             }
         } catch (err) {
@@ -936,7 +958,7 @@ function prepareNextTask() {
 
     // --- 3. FINAL VALIDATION ---
     if (!targetName || targetName === "null") targetName = "Target: Any Artist";
-    
+
     state.currentTarget = targetName;
     console.log("Target Selected:", targetName);
 
@@ -946,31 +968,31 @@ function prepareNextTask() {
     const goBtn = document.getElementById('btn-start-task');
 
     if (modal && modalText && goBtn) {
-        state.isModalOpen = true; 
-        if(typeof stopSound === 'function') stopSound();
+        state.isModalOpen = true;
+        if (typeof stopSound === 'function') stopSound();
 
         modalText.textContent = `Find: ${targetName}`;
-        modal.style.display = 'block'; 
+        modal.style.display = 'block';
 
         const handleGo = (e) => {
-            e.stopPropagation(); 
-            e.preventDefault(); 
-            
-            state.isModalOpen = false; 
+            e.stopPropagation();
+            e.preventDefault();
+
+            state.isModalOpen = false;
             modal.style.display = 'none';
-            
+
             if (state.audioContext && state.audioContext.state === 'suspended') {
                 state.audioContext.resume();
             }
-            
+
             if (typeof startTaskTimer === 'function') startTaskTimer();
         };
 
         const newBtn = goBtn.cloneNode(true);
         goBtn.parentNode.replaceChild(newBtn, goBtn);
-        newBtn.addEventListener('touchstart', handleGo, {passive: false});
+        newBtn.addEventListener('touchstart', handleGo, { passive: false });
         newBtn.addEventListener('click', handleGo);
-        
+
     } else {
         console.error("Modal elements missing");
     }
@@ -980,7 +1002,7 @@ function prepareNextTask() {
 function startTaskTimer() {
     state.isTaskActive = true;
     state.taskStartTime = Date.now();
-    
+
     // Update HUD
     document.getElementById('target-display').textContent = `Find: ${state.currentTarget}`;
     document.getElementById('target-display').style.color = "cyan";
@@ -1005,20 +1027,20 @@ function checkSuccess(selectedItemName) {
 function completeTask() {
     state.isTaskActive = false;
     clearInterval(state.timerInterval);
-    
+
     const finalTime = (Date.now() - state.taskStartTime) / 1000;
-    
+
     // UI Feedback
     document.getElementById('target-display').textContent = "SUCCESS!";
-    document.getElementById('target-display').style.color = "#00FF00"; 
+    document.getElementById('target-display').style.color = "#00FF00";
     document.getElementById('timer-display').textContent = `Time: ${finalTime}s`;
-    
+
     // Vibrate
     if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
-    
+
     // Play Victory Sound (Synthesized Major Triad)
     playVictorySound();
-    
+
     // Allow user to relax before next task
     setTimeout(() => {
         alert(`Target Found!\nTime: ${finalTime}s\n\nClick OK to set up the next task.`);
@@ -1030,7 +1052,7 @@ function completeTask() {
 function playVictorySound() {
     if (!state.audioContext) return;
     const ctx = state.audioContext;
-    
+
     const now = ctx.currentTime;
     // Play C - E - G (C Major)
     [261.63, 329.63, 392.00, 523.25].forEach((freq, i) => {
@@ -1038,10 +1060,10 @@ function playVictorySound() {
         const gain = ctx.createGain();
         osc.frequency.value = freq;
         osc.type = 'sine';
-        
+
         gain.gain.setValueAtTime(0.1, now + (i * 0.1));
         gain.gain.exponentialRampToValueAtTime(0.001, now + (i * 0.1) + 0.4);
-        
+
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(now + (i * 0.1));

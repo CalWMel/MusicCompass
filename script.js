@@ -859,113 +859,120 @@ function randomizeData(node) {
 
 // --- 1. Prepare (Show Modal) ---
 function prepareNextTask() {
-    console.log("Preparing next task... Mode:", state.taskMode); 
+    console.log("Preparing task. Mode:", state.taskMode);
 
-    // --- 1. HANDLE FAMILIARIZATION (No Target) ---
+    // --- 1. HANDLE FAMILIARIZATION ---
     if (state.taskMode === 'FAMILIARIZATION') {
         document.getElementById('target-display').textContent = "Free Play (No Target)";
         document.getElementById('target-display').style.color = "#aaa";
-        // Ensure modal is hidden
         const modal = document.getElementById('task-modal');
         if(modal) modal.style.display = 'none';
-        state.isModalOpen = false; 
+        state.isModalOpen = false;
         return;
     }
 
-    // --- 2. PICK THE TARGET ---
-    let targetName = "Error: Target Not Found"; 
+    // --- 2. PICK THE TARGET (FIXED) ---
+    let targetName = "Any Song"; 
     
-    // Verify data exists
-    if (!state.currentDataNode || !Array.isArray(state.currentDataNode)) {
-        console.error("Data error: state.currentDataNode is missing");
-        alert("Error: Music Data not loaded. Please refresh.");
-        return;
+    // A. FIND THE GLOBAL ROOT (Ignore current navigation level)
+    let libraryRoot = null;
+    if (typeof musicData !== 'undefined' && musicData.children) {
+        libraryRoot = musicData.children; // Access the main list
+    } else if (typeof MUSIC_LIBRARY !== 'undefined') {
+        libraryRoot = MUSIC_LIBRARY;
+    } else {
+        // Emergency fallback
+        libraryRoot = state.currentDataNode;
     }
 
-    // MODE A: RANDOM ARTIST
-    if (state.taskMode === 'ARTIST') {
-        const randomGenre = state.currentDataNode[Math.floor(Math.random() * state.currentDataNode.length)];
-        if (randomGenre && randomGenre.children && randomGenre.children.length > 0) {
-            const randomArtist = randomGenre.children[Math.floor(Math.random() * randomGenre.children.length)];
-            targetName = randomArtist.name;
-        }
-    } 
-    // MODE B: FIND MJ / DAFT PUNK TRACK
-    else if (state.taskMode === 'TRACK_MJ_DP') {
-        const potentialTargets = [];
-        
-        // Search the shuffled library for the specific artists
-        state.currentDataNode.forEach(genre => {
-            if (genre.children) {
-                genre.children.forEach(artist => {
-                    const n = artist.name.toLowerCase();
-                    if (n.includes("michael") || n.includes("daft") || n.includes("punk")) {
-                        potentialTargets.push(artist);
+    // B. PERFORM SELECTION ON GLOBAL ROOT
+    if (!libraryRoot || !Array.isArray(libraryRoot)) {
+        targetName = "Error: Data Missing";
+    } else {
+        try {
+            // MODE A: FIND RANDOM ARTIST
+            if (state.taskMode === 'ARTIST') {
+                const randomGenre = libraryRoot[Math.floor(Math.random() * libraryRoot.length)];
+                if (randomGenre && randomGenre.children && randomGenre.children.length > 0) {
+                    const randomArtist = randomGenre.children[Math.floor(Math.random() * randomGenre.children.length)];
+                    targetName = randomArtist.name;
+                } else {
+                    targetName = "Retry Task"; 
+                }
+            } 
+            // MODE B: FIND SPECIFIC TRACK (MJ / DAFT PUNK)
+            else if (state.taskMode === 'TRACK_MJ_DP') {
+                const potentialArtists = [];
+                
+                // Search the FULL libraryRoot
+                libraryRoot.forEach(genre => {
+                    if (genre.children) {
+                        genre.children.forEach(artist => {
+                            const n = artist.name.toLowerCase();
+                            if (n.includes("michael") || n.includes("daft") || n.includes("punk")) {
+                                potentialArtists.push(artist);
+                            }
+                        });
                     }
                 });
-            }
-        });
 
-        if (potentialTargets.length > 0) {
-            const chosenArtist = potentialTargets[Math.floor(Math.random() * potentialTargets.length)];
-            // Pick a random track from that artist
-            if (chosenArtist.children && chosenArtist.children.length > 0) {
-                const chosenTrack = chosenArtist.children[Math.floor(Math.random() * chosenArtist.children.length)];
-                targetName = chosenTrack.name;
-            } else {
-                targetName = chosenArtist.name + " (No Tracks)";
+                if (potentialArtists.length > 0) {
+                    const chosenArtist = potentialArtists[Math.floor(Math.random() * potentialArtists.length)];
+                    if (chosenArtist.children && chosenArtist.children.length > 0) {
+                        const chosenTrack = chosenArtist.children[Math.floor(Math.random() * chosenArtist.children.length)];
+                        targetName = chosenTrack.name;
+                    } else {
+                        targetName = chosenArtist.name;
+                    }
+                } else {
+                    targetName = "Michael Jackson"; 
+                }
             }
-        } else {
-            // Fallback just in case
-            targetName = "Target: Any Song"; 
+        } catch (err) {
+            console.error("Error picking target:", err);
+            targetName = "Error: Retry";
         }
     }
 
-    // --- 3. SAVE TARGET TO STATE ---
+    // --- 3. FINAL VALIDATION ---
+    if (!targetName || targetName === "null") targetName = "Target: Any Artist";
+    
     state.currentTarget = targetName;
-    console.log("Target set to:", state.currentTarget);
+    console.log("Target Selected:", targetName);
 
-    // --- 4. SHOW MODAL & LOCK SENSORS ---
+    // --- 4. SHOW MODAL & LOCK SYSTEM ---
     const modal = document.getElementById('task-modal');
     const modalText = document.getElementById('modal-target-text');
     const goBtn = document.getElementById('btn-start-task');
 
     if (modal && modalText && goBtn) {
-        // A. LOCKDOWN (Block sensors)
         state.isModalOpen = true; 
-        if(typeof stopSound === 'function') stopSound(); 
+        if(typeof stopSound === 'function') stopSound();
 
-        // B. UPDATE UI
         modalText.textContent = `Find: ${targetName}`;
         modal.style.display = 'block'; 
 
-        // C. HANDLE "GO" CLICK
         const handleGo = (e) => {
-            e.stopPropagation(); // Stop the touch from bubbling to the compass
-            e.preventDefault();  // Stop double-firing
+            e.stopPropagation(); 
+            e.preventDefault(); 
             
-            console.log("GO Pressed. Unlocking System.");
-            
-            // D. UNLOCK
-            state.isModalOpen = false; // Sensors active now
+            state.isModalOpen = false; 
             modal.style.display = 'none';
             
-            // Resume Audio Engine
             if (state.audioContext && state.audioContext.state === 'suspended') {
                 state.audioContext.resume();
             }
             
-            startTaskTimer();
+            if (typeof startTaskTimer === 'function') startTaskTimer();
         };
 
-        // Reset button listeners
         const newBtn = goBtn.cloneNode(true);
         goBtn.parentNode.replaceChild(newBtn, goBtn);
         newBtn.addEventListener('touchstart', handleGo, {passive: false});
         newBtn.addEventListener('click', handleGo);
         
     } else {
-        console.error("Critical Error: Modal elements not found in HTML");
+        console.error("Modal elements missing");
     }
 }
 

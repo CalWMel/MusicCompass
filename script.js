@@ -849,51 +849,99 @@ function randomizeData(node) {
 
 // --- ADVANCED EVALUATION HARNESS ---
 
-// 1. Prepare (Show Modal)
+// --- 1. Prepare (Show Modal) ---
 function prepareNextTask() {
-    console.log("Preparing next task..."); // DEBUG
+    console.log("Preparing next task... Mode:", state.taskMode); 
 
+    // 1. Handle Familiarization (No Target)
     if (state.taskMode === 'FAMILIARIZATION') {
         document.getElementById('target-display').textContent = "Free Play (No Target)";
         document.getElementById('target-display').style.color = "#aaa";
         return;
     }
 
-    // A. Pick Target
-    let targetName = "";
-    
-    // ... (Keep your existing target picking logic here) ...
-    // If you lost the logic, just use this simple fallback for testing:
-    if (!state.currentTarget) state.currentTarget = "Test Target";
-    targetName = state.currentTarget; 
+    // 2. Logic to Pick a Target [RESTORED]
+    let targetName = "Error: No Target";
+    let targetParent = "";
 
-    // B. Show Modal
+    // Safety check: ensure data exists
+    if (!state.currentDataNode || !Array.isArray(state.currentDataNode)) {
+        console.error("Data error: state.currentDataNode is missing");
+        alert("Error: Music Data not loaded correctly. Refresh page.");
+        return;
+    }
+
+    if (state.taskMode === 'ARTIST') {
+        // Pick Random Genre -> Random Artist
+        const randomGenre = state.currentDataNode[Math.floor(Math.random() * state.currentDataNode.length)];
+        if (randomGenre && randomGenre.children) {
+            const randomArtist = randomGenre.children[Math.floor(Math.random() * randomGenre.children.length)];
+            targetName = randomArtist.name;
+            targetParent = randomGenre.name;
+        }
+    } 
+    else if (state.taskMode === 'TRACK_MJ_DP') {
+        // Find MJ or Daft Punk specifically in the SHUFFLED list
+        const targets = [];
+        
+        state.currentDataNode.forEach(genre => {
+            if (genre.children) {
+                genre.children.forEach(artist => {
+                    // Look for matches in the current shuffled data
+                    if (artist.name.toLowerCase().includes("michael") || 
+                        artist.name.toLowerCase().includes("daft")) {
+                        targets.push(artist);
+                    }
+                });
+            }
+        });
+
+        if (targets.length > 0) {
+            const chosenArtist = targets[Math.floor(Math.random() * targets.length)];
+            if (chosenArtist.children && chosenArtist.children.length > 0) {
+                const chosenTrack = chosenArtist.children[Math.floor(Math.random() * chosenArtist.children.length)];
+                targetName = chosenTrack.name;
+                targetParent = chosenArtist.name;
+            }
+        } else {
+            console.warn("MJ/Daft Punk not found in shuffled data. Using fallback.");
+            targetName = "Daft Punk (Fallback)"; // Fallback if shuffle hides them
+        }
+    }
+
+    // 3. Update State
+    state.currentTarget = targetName;
+    console.log("Target selected:", targetName);
+
+    // 4. Show Modal (The UI)
     const modal = document.getElementById('task-modal');
     const modalText = document.getElementById('modal-target-text');
     const goBtn = document.getElementById('btn-start-task');
 
-    modalText.textContent = `Find: ${targetName}`;
-    modal.style.display = 'block';
+    if (modal && modalText && goBtn) {
+        modalText.textContent = `Find: ${targetName}`;
+        modal.style.display = 'block'; // Show the black screen
 
-    console.log("Modal shown. Waiting for GO click..."); // DEBUG
-
-    // REMOVE OLD LISTENERS to prevent double-clicks
-    const newBtn = goBtn.cloneNode(true);
-    goBtn.parentNode.replaceChild(newBtn, goBtn);
-
-    newBtn.addEventListener('click', () => {
-        console.log("GO Clicked!"); // DEBUG
-        modal.style.display = 'none';
-        
-        // Resume Audio Context if suspended
-        if (state.audioContext && state.audioContext.state === 'suspended') {
-            state.audioContext.resume();
-        }
-        
-        startTaskTimer();
-    });
+        // 5. ACTIVATE "GO" BUTTON (Simplified Method)
+        // We use .onclick instead of addEventListener to prevent duplicate clicks automatically
+        goBtn.onclick = function() {
+            console.log("GO Clicked - Starting Timer");
+            
+            // A. Hide the modal
+            modal.style.display = 'none';
+            
+            // B. Resume Audio (Browser often suspends audio while waiting)
+            if (state.audioContext && state.audioContext.state === 'suspended') {
+                state.audioContext.resume();
+            }
+            
+            // C. Start the actual timer
+            startTaskTimer();
+        };
+    } else {
+        console.error("Critical Error: Modal elements not found in HTML");
+    }
 }
-
 // 2. Start Timer
 function startTaskTimer() {
     state.isTaskActive = true;

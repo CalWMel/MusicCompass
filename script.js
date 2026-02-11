@@ -966,11 +966,7 @@ function prepareNextTask() {
                 state.audioContext.resume();
             }
 
-            // ========================================================
-            // THE FIX: FORCE AUDIO ENGINE TO SYNC
-            // We call enterLevel to force the audio engine to load 
-            // the new randomized root data.
-            // ========================================================
+    
             if (typeof enterLevel === 'function') {
                 console.log("Forcing Audio Sync for New Task...");
 

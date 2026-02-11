@@ -74,12 +74,16 @@ const state = {
     // New Flags
     isLoading: false,  
     lastTapTime: 0,
+
+    // Evaluation Config
+    taskMode: 'FAMILIARIZATION', // 'ARTIST', 'TRACK_MJ_DP'
+    obscureScreen: false,
     
-    // Evaluation State
-    currentTarget: null,      
-    taskStartTime: 0,        
-    isTaskActive: false,      
-    timerInterval: null,      
+    // Evaluation Runtime
+    currentTarget: null,
+    taskStartTime: 0,
+    isTaskActive: false,
+    timerInterval: null    
 };
 
 // --- DOM ELEMENTS ---
@@ -90,32 +94,32 @@ const sectorDiv = document.getElementById('sector-display');
 
 // --- INITIALIZATION ---
 startBtn.addEventListener('click', async () => {
-    // 1. CAPTURE THE SELECTED MODE
-    const selector = document.getElementById('mode-select');
-    state.experimentMode = selector.value;
+    // 1. CAPTURE SETTINGS
+    state.experimentMode = document.getElementById('mode-select').value;
+    state.taskMode = document.getElementById('task-select').value;
+    state.obscureScreen = document.getElementById('vision-toggle').checked;
     
-    // Hide the setup controls
     document.getElementById('setup-controls').style.display = 'none';
 
-    // --- CRITICAL FIX: RANDOMIZE BEFORE LOADING AUDIO ---
-    console.log("Randomizing Music Library...");
-    
-    // Check which data variable exists and shuffle it
-    if (typeof musicData !== 'undefined') {
-        randomizeData(musicData);
-        state.currentDataNode = musicData.children;
-        console.log("Randomized 'musicData'");
-    } 
-    else if (typeof MUSIC_LIBRARY !== 'undefined') {
-        randomizeData(MUSIC_LIBRARY);
-        state.currentDataNode = MUSIC_LIBRARY;
-        console.log("Randomized 'MUSIC_LIBRARY'");
+    // 2. APPLY SCREEN BLUR?
+    if (state.obscureScreen) {
+        // Blur everything except the modal
+        uiContainer.style.filter = "blur(8px)"; 
+        uiContainer.style.opacity = "0.6";
     }
 
-    // 2. NOW LOAD AUDIO (It will use the shuffled order)
+    // 3. RANDOMIZE & LOAD
+    if (typeof musicData !== 'undefined') {
+        randomizeData(musicData); 
+        state.currentDataNode = musicData.children; 
+    } else if (typeof MUSIC_LIBRARY !== 'undefined') {
+        randomizeData(MUSIC_LIBRARY);
+        state.currentDataNode = MUSIC_LIBRARY;
+    }
+
     await initAudio();
 
-    // 3. START SENSORS
+    // 4. START SENSORS
     if (typeof DeviceOrientationEvent !== 'undefined' && 
         typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
@@ -133,15 +137,15 @@ function initApp() {
     
     // Note: Randomization has already happened in the Start Button handler.
     
-    // --- NEW: START THE FIRST EVALUATION TASK ---
-    // We wait 1 second to let the audio engine settle, then trigger the first target.
+    // --- TRIGGER FIRST TASK (Updated for Pre-Task Modal) ---
+    // We wait 1 second to let the audio engine settle, then trigger the preparation logic.
     setTimeout(() => {
-        if (typeof startEvaluationTask === 'function') {
-            startEvaluationTask();
+        if (typeof prepareNextTask === 'function') {
+            prepareNextTask();
         } else {
-            console.warn("Evaluation Harness not found. Did you paste the helper functions at the bottom?");
+            console.warn("Evaluation logic (prepareNextTask) not found.");
         }
-    }, 1000);
+    }, 1000); 
 
     // --- 1. SETUP MODE & BUTTON VISIBILITY ---
     const toggleBtn = document.getElementById('btn-system-toggle');
@@ -179,9 +183,8 @@ function initApp() {
                 }
                 stopSound();
                 
-                // --- STEP 5: PAUSE TIMER (OPTIONAL) ---
+                // Pause timer if active so user isn't penalized for taking a break
                 if (state.timerInterval) clearInterval(state.timerInterval); 
-                // --------------------------------------
 
                 newBtn.textContent = "Resume Browsing";
                 newBtn.style.backgroundColor = "#4CAF50"; // Green
@@ -197,15 +200,13 @@ function initApp() {
                 
                 state.isManualPause = false; 
 
-                // --- STEP 5: RESUME TIMER ---
+                // Resume timer if a task is currently active
                 if (state.isTaskActive) {
-                    // Just restart the visual update interval
                     state.timerInterval = setInterval(() => {
                        const elapsed = (Date.now() - state.taskStartTime) / 1000;
                        document.getElementById('timer-display').textContent = elapsed.toFixed(1) + "s";
                     }, 100);
                 }
-                // ----------------------------
 
                 // RESTORE CORRECT UI TEXT
                 const item = state.currentDataNode[state.currentSector];
@@ -832,53 +833,95 @@ function randomizeData(node) {
     }
 }
 
-// --- EVALUATION HARNESS ---
+// --- ADVANCED EVALUATION HARNESS ---
 
-// 1. Start a New Task
-function startEvaluationTask() {
-    // A. Pick a random target from the current data (Deep Dive)
-    // For this prototype, let's pick a random Artist from the shuffled library
-    // ensuring we are not picking the one we are currently facing if possible.
-    
-    const randomGenre = state.currentDataNode[Math.floor(Math.random() * state.currentDataNode.length)];
-    
-    // Safety check: ensure genre has children (Artists)
-    if (!randomGenre.children || randomGenre.children.length === 0) {
-        console.error("Data structure error: Genre has no artists");
+// 1. Prepare (Show Modal)
+function prepareNextTask() {
+    if (state.taskMode === 'FAMILIARIZATION') {
+        document.getElementById('target-display').textContent = "Free Play (No Target)";
+        document.getElementById('target-display').style.color = "#aaa";
         return;
     }
 
-    const randomArtist = randomGenre.children[Math.floor(Math.random() * randomGenre.children.length)];
-    
-    state.currentTarget = randomArtist.name;
+    // A. Pick Target
+    let targetName = "";
+    let targetParent = "";
+
+    if (state.taskMode === 'ARTIST') {
+        // Pick Random Genre -> Random Artist
+        const randomGenre = state.currentDataNode[Math.floor(Math.random() * state.currentDataNode.length)];
+        const randomArtist = randomGenre.children[Math.floor(Math.random() * randomGenre.children.length)];
+        targetName = randomArtist.name;
+        targetParent = randomGenre.name;
+    } 
+    else if (state.taskMode === 'TRACK_MJ_DP') {
+        // Find MJ or Daft Punk specifically
+        // Note: We search the SHUFFLED list to find where they ended up
+        const targets = [];
+        
+        // Helper to search tree
+        state.currentDataNode.forEach(genre => {
+            genre.children.forEach(artist => {
+                if (artist.name.includes("Michael Jackson") || artist.name.includes("Daft Punk")) {
+                    targets.push(artist);
+                }
+            });
+        });
+
+        if (targets.length > 0) {
+            const chosenArtist = targets[Math.floor(Math.random() * targets.length)];
+            const chosenTrack = chosenArtist.children[Math.floor(Math.random() * chosenArtist.children.length)];
+            targetName = chosenTrack.name;
+            targetParent = chosenArtist.name;
+        } else {
+            console.error("MJ/Daft Punk not found in data!");
+            targetName = "Error: Retry";
+        }
+    }
+
+    state.currentTarget = targetName;
+
+    // B. Show Modal
+    const modal = document.getElementById('task-modal');
+    const modalText = document.getElementById('modal-target-text');
+    const btn = document.getElementById('btn-start-task');
+
+    modalText.textContent = `Find: ${targetName}`;
+    modal.style.display = 'block';
+
+    // One-time listener for the GO button
+    btn.onclick = () => {
+        modal.style.display = 'none';
+        startTaskTimer();
+    };
+}
+
+// 2. Start Timer
+function startTaskTimer() {
     state.isTaskActive = true;
     state.taskStartTime = Date.now();
     
-    // B. Update UI
+    // Update HUD
     document.getElementById('target-display').textContent = `Find: ${state.currentTarget}`;
     document.getElementById('target-display').style.color = "cyan";
-    
-    // C. Start Visual Timer
+
     if (state.timerInterval) clearInterval(state.timerInterval);
     state.timerInterval = setInterval(() => {
         const elapsed = (Date.now() - state.taskStartTime) / 1000;
         document.getElementById('timer-display').textContent = elapsed.toFixed(1) + "s";
     }, 100);
-    
-    console.log(`Task Started: Find ${state.currentTarget} (in ${randomGenre.name})`);
 }
 
-// 2. Check for Success
+// 3. Check Success
 function checkSuccess(selectedItemName) {
     if (!state.isTaskActive) return;
 
     if (selectedItemName === state.currentTarget) {
-        // SUCCESS!
         completeTask();
     }
 }
 
-// 3. Task Complete
+// 4. Victory!
 function completeTask() {
     state.isTaskActive = false;
     clearInterval(state.timerInterval);
@@ -887,17 +930,41 @@ function completeTask() {
     
     // UI Feedback
     document.getElementById('target-display').textContent = "SUCCESS!";
-    document.getElementById('target-display').style.color = "#00FF00"; // Bright Green
-    document.getElementById('timer-display').textContent = `Final Time: ${finalTime}s`;
+    document.getElementById('target-display').style.color = "#00FF00"; 
+    document.getElementById('timer-display').textContent = `Time: ${finalTime}s`;
     
-    // Vibrate to celebrate
+    // Vibrate
     if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
     
-    // Play Confirmation Sound (if available)
-    playConfirmationSound();
+    // Play Victory Sound (Synthesized Major Triad)
+    playVictorySound();
     
-    alert(`Target Found!\nTime: ${finalTime}s\n\nTake a screenshot now if needed, then click OK for next task.`);
+    // Allow user to relax before next task
+    setTimeout(() => {
+        alert(`Target Found!\nTime: ${finalTime}s\n\nClick OK to set up the next task.`);
+        prepareNextTask();
+    }, 500);
+}
+
+// 5. Synthesized Victory Sound (No file needed)
+function playVictorySound() {
+    if (!state.audioContext) return;
+    const ctx = state.audioContext;
     
-    // Optional: Auto-start next task after a delay?
-    // For now, let's just reset or wait for manual restart
+    const now = ctx.currentTime;
+    // Play C - E - G (C Major)
+    [261.63, 329.63, 392.00, 523.25].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = freq;
+        osc.type = 'sine';
+        
+        gain.gain.setValueAtTime(0.1, now + (i * 0.1));
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (i * 0.1) + 0.4);
+        
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + (i * 0.1));
+        osc.stop(now + (i * 0.1) + 0.4);
+    });
 }

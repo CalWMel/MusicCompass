@@ -502,7 +502,7 @@ function engageClutch(e) {
 
     // BLOCK if modal is open
     if (state.isModalOpen) return;
-    
+
     // 1. IGNORE THE BUTTON (Let the click happen normally)
     if (e.target.closest('#btn-system-toggle')) return;
 
@@ -861,54 +861,96 @@ function randomizeData(node) {
 function prepareNextTask() {
     console.log("Preparing next task... Mode:", state.taskMode); 
 
-    // 1. Handle Familiarization
+    // --- 1. HANDLE FAMILIARIZATION (No Target) ---
     if (state.taskMode === 'FAMILIARIZATION') {
         document.getElementById('target-display').textContent = "Free Play (No Target)";
         document.getElementById('target-display').style.color = "#aaa";
+        // Ensure modal is hidden
         const modal = document.getElementById('task-modal');
         if(modal) modal.style.display = 'none';
-        state.isModalOpen = false; // Unlock
+        state.isModalOpen = false; 
         return;
     }
 
-    // 2. Pick Target Logic (Same as before)
-    // ... (Your existing target picking code is fine here) ...
-    // To save space, I will assume you keep the target picking logic we wrote previously.
-    // If you need it again, let me know! 
+    // --- 2. PICK THE TARGET ---
+    let targetName = "Error: Target Not Found"; 
     
-    // [Insert Logic for ARTIST / TRACK_MJ_DP / Fallback here]
-    // (Ensure you define 'targetName' properly before moving to step 4)
-    // For safety, here is a quick generic fallback if you copy-paste this:
-    if (typeof targetName === 'undefined') {
-         // Re-run the selection logic or define variables here 
-         // (You can copy the logic block from the previous message)
+    // Verify data exists
+    if (!state.currentDataNode || !Array.isArray(state.currentDataNode)) {
+        console.error("Data error: state.currentDataNode is missing");
+        alert("Error: Music Data not loaded. Please refresh.");
+        return;
     }
 
-    // 4. Show Modal & LOCK SYSTEM
+    // MODE A: RANDOM ARTIST
+    if (state.taskMode === 'ARTIST') {
+        const randomGenre = state.currentDataNode[Math.floor(Math.random() * state.currentDataNode.length)];
+        if (randomGenre && randomGenre.children && randomGenre.children.length > 0) {
+            const randomArtist = randomGenre.children[Math.floor(Math.random() * randomGenre.children.length)];
+            targetName = randomArtist.name;
+        }
+    } 
+    // MODE B: FIND MJ / DAFT PUNK TRACK
+    else if (state.taskMode === 'TRACK_MJ_DP') {
+        const potentialTargets = [];
+        
+        // Search the shuffled library for the specific artists
+        state.currentDataNode.forEach(genre => {
+            if (genre.children) {
+                genre.children.forEach(artist => {
+                    const n = artist.name.toLowerCase();
+                    if (n.includes("michael") || n.includes("daft") || n.includes("punk")) {
+                        potentialTargets.push(artist);
+                    }
+                });
+            }
+        });
+
+        if (potentialTargets.length > 0) {
+            const chosenArtist = potentialTargets[Math.floor(Math.random() * potentialTargets.length)];
+            // Pick a random track from that artist
+            if (chosenArtist.children && chosenArtist.children.length > 0) {
+                const chosenTrack = chosenArtist.children[Math.floor(Math.random() * chosenArtist.children.length)];
+                targetName = chosenTrack.name;
+            } else {
+                targetName = chosenArtist.name + " (No Tracks)";
+            }
+        } else {
+            // Fallback just in case
+            targetName = "Target: Any Song"; 
+        }
+    }
+
+    // --- 3. SAVE TARGET TO STATE ---
+    state.currentTarget = targetName;
+    console.log("Target set to:", state.currentTarget);
+
+    // --- 4. SHOW MODAL & LOCK SENSORS ---
     const modal = document.getElementById('task-modal');
     const modalText = document.getElementById('modal-target-text');
     const goBtn = document.getElementById('btn-start-task');
 
     if (modal && modalText && goBtn) {
-        // --- LOCKDOWN ---
-        state.isModalOpen = true; // <--- SENSORS WILL NOW BE BLOCKED
-        stopSound();              // <--- SILENCE AUDIO
-        // ----------------
-        
-        modalText.textContent = `Find: ${state.currentTarget}`;
+        // A. LOCKDOWN (Block sensors)
+        state.isModalOpen = true; 
+        if(typeof stopSound === 'function') stopSound(); 
+
+        // B. UPDATE UI
+        modalText.textContent = `Find: ${targetName}`;
         modal.style.display = 'block'; 
 
-        // 5. GO Handler
+        // C. HANDLE "GO" CLICK
         const handleGo = (e) => {
-            e.stopPropagation(); 
+            e.stopPropagation(); // Stop the touch from bubbling to the compass
+            e.preventDefault();  // Stop double-firing
             
-            console.log("GO Pressed - Unlocking System");
+            console.log("GO Pressed. Unlocking System.");
             
-            // --- UNLOCK ---
-            state.isModalOpen = false; // <--- SENSORS RE-ENABLED
+            // D. UNLOCK
+            state.isModalOpen = false; // Sensors active now
             modal.style.display = 'none';
-            // --------------
             
+            // Resume Audio Engine
             if (state.audioContext && state.audioContext.state === 'suspended') {
                 state.audioContext.resume();
             }
@@ -916,13 +958,14 @@ function prepareNextTask() {
             startTaskTimer();
         };
 
+        // Reset button listeners
         const newBtn = goBtn.cloneNode(true);
         goBtn.parentNode.replaceChild(newBtn, goBtn);
         newBtn.addEventListener('touchstart', handleGo, {passive: false});
         newBtn.addEventListener('click', handleGo);
         
     } else {
-        console.error("Critical Error: Modal elements not found");
+        console.error("Critical Error: Modal elements not found in HTML");
     }
 }
 

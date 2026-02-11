@@ -45,20 +45,19 @@
 </head>
 
 <body>
-
     <div id="setup-controls"
-        style="text-align:center; padding: 40px; margin-top: 15vh; background: #222; border-radius: 15px; box-shadow: 0 0 20px black; max-width: 400px; margin-left: auto; margin-right: auto;">
-        <h1 style="margin-top:0;">Music Compass</h1>
-    
-        <div style="text-align: left; margin-bottom: 20px;">
+        style="text-align:center; padding: 40px; margin-top: 15vh; background: #222; border-radius: 15px; box-shadow: 0 0 20px black; max-width: 400px; margin-left: auto; margin-right: auto; position: relative; z-index: 1000;">
+        <h1 style="margin-top:0; color: white;">Music Compass</h1>
+
+        <div style="text-align: left; margin-bottom: 20px; color: #ccc;">
             <label>Navigation Mode:</label>
             <select id="mode-select" style="width: 100%; padding: 10px; margin-top: 5px;">
                 <option value="CLUTCH">Clutch (Hold-to-Browse)</option>
                 <option value="ALWAYS_ON">Always-On (Tap-to-Lock)</option>
             </select>
         </div>
-    
-        <div style="text-align: left; margin-bottom: 20px;">
+
+        <div style="text-align: left; margin-bottom: 20px; color: #ccc;">
             <label>Evaluation Task:</label>
             <select id="task-select" style="width: 100%; padding: 10px; margin-top: 5px;">
                 <option value="FAMILIARIZATION">Familiarization (Free Play)</option>
@@ -66,58 +65,43 @@
                 <option value="TRACK_MJ_DP">Find Tracks (MJ / Daft Punk)</option>
             </select>
         </div>
-    
-        <div style="text-align: left; margin-bottom: 30px;">
+
+        <div style="text-align: left; margin-bottom: 30px; color: #ccc;">
             <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                 <input type="checkbox" id="vision-toggle" style="width: 20px; height: 20px;">
                 <span style="font-size: 14px;">Simulate Eyes-Free (Blur Screen)</span>
             </label>
         </div>
-    
+
         <button id="btn-start"
             style="width: 100%; padding: 15px; font-size: 18px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer;">
             Start Prototype
         </button>
     </div>
-    
+
     <div id="task-modal"
-        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:2000; text-align:center; padding-top: 30%;">
-        <h2 style="color:#aaa;">NEXT TASK</h2>
-        <h1 id="modal-target-text" style="color:cyan; font-size: 32px; margin: 20px;">--</h1>
-        <div style="font-size:14px; color:#666; margin-bottom:30px;">(Timer starts when you click GO)</div>
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:2000; text-align:center; padding-top: 30vh;">
+        <h2 style="color:#aaa; font-family: sans-serif;">NEXT TASK</h2>
+        <h1 id="modal-target-text" style="color:cyan; font-size: 32px; margin: 20px; font-family: sans-serif;">--</h1>
+        <div style="font-size:14px; color:#666; margin-bottom:30px; font-family: sans-serif;">(Timer starts when you
+            click GO)</div>
         <button id="btn-start-task"
-            style="padding: 20px 40px; font-size: 24px; background:#4CAF50; color:white; border:none; border-radius:8px;">GO</button>
+            style="padding: 20px 60px; font-size: 24px; background:#4CAF50; color:white; border:none; border-radius:8px; cursor: pointer;">GO</button>
     </div>
 
-    <button id="btn-start">Start / Request Permissions</button>
-
-    <div id="ui-container" style="display:none; text-align:center;">
-        <div id="status">Clutch Disengaged (Paused)</div>
-        <div style="margin: 20px 0;">
-            <span style="color:#888; font-size:0.9rem;">CURRENT SECTOR</span><br>
-            <div id="eval-hud" style="margin-bottom: 20px; padding: 10px; background: rgba(50, 50, 50, 0.8); border-radius: 8px;">
-                <div style="font-size: 14px; color: #aaa;">CURRENT TASK</div>
-                <div id="target-display" style="font-size: 24px; color: cyan; font-weight: bold;">--</div>
-                <div id="timer-display" style="font-size: 18px; color: white; margin-top: 5px;">0.0s</div>
-            </div>
-            <div id="sector-display" style="font-size:2rem; font-weight:bold;">-</div>
+    <div id="ui-container" style="display:none;">
+        <div id="eval-hud"
+            style="margin-bottom: 20px; padding: 10px; background: rgba(50, 50, 50, 0.8); border-radius: 8px;">
+            <div style="font-size: 14px; color: #aaa;">CURRENT TASK</div>
+            <div id="target-display" style="font-size: 24px; color: cyan; font-weight: bold;">--</div>
+            <div id="timer-display" style="font-size: 18px; color: white; margin-top: 5px;">0.0s</div>
         </div>
-    
-        <button id="btn-system-toggle" style="
-                padding: 15px 30px; 
-                font-size: 1.2rem; 
-                background: #ff4444; 
-                color: white; 
-                border: none; 
-                border-radius: 50px; 
-                margin-top: 30px;
-                box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
-            Stop Browsing
-        </button>
-    
-        <p class="instruction" style="margin-top:20px; color:#aaa;">
-            Press button to Pause/Resume the compass.
-        </p>
+
+        <div id="sector-display">--</div>
+
+        <div id="status">initializing...</div>
+
+        <button id="btn-system-toggle">Stop Browsing</button>
     </div>
 
     <script src="data.js"></script>

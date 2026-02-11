@@ -87,28 +87,37 @@ const state = {
 };
 
 // --- DOM ELEMENTS ---
-const startBtn = document.getElementById('btn-start');
 const uiContainer = document.getElementById('ui-container');
 const statusDiv = document.getElementById('status');
 const sectorDiv = document.getElementById('sector-display');
 
 // --- INITIALIZATION ---
+// Ensure we are grabbing the correct new button ID
+const startBtn = document.getElementById('btn-start'); 
+
 startBtn.addEventListener('click', async () => {
     // 1. CAPTURE SETTINGS
-    state.experimentMode = document.getElementById('mode-select').value;
-    state.taskMode = document.getElementById('task-select').value;
-    state.obscureScreen = document.getElementById('vision-toggle').checked;
-    
-    document.getElementById('setup-controls').style.display = 'none';
+    const modeSelect = document.getElementById('mode-select');
+    const taskSelect = document.getElementById('task-select');
+    const visionToggle = document.getElementById('vision-toggle');
 
-    // 2. APPLY SCREEN BLUR?
-    if (state.obscureScreen) {
-        // Blur everything except the modal
-        uiContainer.style.filter = "blur(8px)"; 
-        uiContainer.style.opacity = "0.6";
+    if (modeSelect) state.experimentMode = modeSelect.value;
+    if (taskSelect) state.taskMode = taskSelect.value;
+    if (visionToggle) state.obscureScreen = visionToggle.checked;
+    
+    // 2. HIDE SETUP CONTROLS (The critical part)
+    const setupDiv = document.getElementById('setup-controls');
+    if (setupDiv) setupDiv.style.display = 'none';
+
+    // 3. APPLY SCREEN BLUR IF REQUESTED
+    const ui = document.getElementById('ui-container');
+    if (state.obscureScreen && ui) {
+        ui.style.filter = "blur(8px)"; 
+        ui.style.opacity = "0.6";
     }
 
-    // 3. RANDOMIZE & LOAD
+    // 4. RANDOMIZE & LOAD AUDIO
+    console.log("Starting... Randomizing Data");
     if (typeof musicData !== 'undefined') {
         randomizeData(musicData); 
         state.currentDataNode = musicData.children; 
@@ -119,15 +128,20 @@ startBtn.addEventListener('click', async () => {
 
     await initAudio();
 
-    // 4. START SENSORS
+    // 5. START SENSORS
     if (typeof DeviceOrientationEvent !== 'undefined' && 
         typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
             const permission = await DeviceOrientationEvent.requestPermission();
             if (permission === 'granted') initApp();
-            else alert("Permission denied.");
-        } catch (error) { initApp(); }
-    } else { initApp(); }
+            else alert("Permission denied. App may not work.");
+        } catch (error) { 
+            console.error(error);
+            initApp(); 
+        }
+    } else { 
+        initApp(); 
+    }
 });
 
 function initApp() {

@@ -71,9 +71,15 @@ const state = {
     pauseOffset: 0,
     pausedSector: -1,
 
-    // NEW FLAGS
+    // New Flags
     isLoading: false,  
-    lastTapTime: 0,        
+    lastTapTime: 0,
+    
+    // Evaluation State
+    currentTarget: null,      
+    taskStartTime: 0,        
+    isTaskActive: false,      
+    timerInterval: null,      
 };
 
 // --- DOM ELEMENTS ---
@@ -126,7 +132,16 @@ function initApp() {
     uiContainer.style.display = 'block';
     
     // Note: Randomization has already happened in the Start Button handler.
-    // Do NOT call randomizeData() here.
+    
+    // --- NEW: START THE FIRST EVALUATION TASK ---
+    // We wait 1 second to let the audio engine settle, then trigger the first target.
+    setTimeout(() => {
+        if (typeof startEvaluationTask === 'function') {
+            startEvaluationTask();
+        } else {
+            console.warn("Evaluation Harness not found. Did you paste the helper functions at the bottom?");
+        }
+    }, 1000);
 
     // --- 1. SETUP MODE & BUTTON VISIBILITY ---
     const toggleBtn = document.getElementById('btn-system-toggle');
@@ -164,6 +179,10 @@ function initApp() {
                 }
                 stopSound();
                 
+                // --- STEP 5: PAUSE TIMER (OPTIONAL) ---
+                if (state.timerInterval) clearInterval(state.timerInterval); 
+                // --------------------------------------
+
                 newBtn.textContent = "Resume Browsing";
                 newBtn.style.backgroundColor = "#4CAF50"; // Green
                 statusDiv.textContent = "System Paused (Idle)";
@@ -177,6 +196,16 @@ function initApp() {
                 newBtn.style.backgroundColor = "#ff4444"; // Red
                 
                 state.isManualPause = false; 
+
+                // --- STEP 5: RESUME TIMER ---
+                if (state.isTaskActive) {
+                    // Just restart the visual update interval
+                    state.timerInterval = setInterval(() => {
+                       const elapsed = (Date.now() - state.taskStartTime) / 1000;
+                       document.getElementById('timer-display').textContent = elapsed.toFixed(1) + "s";
+                    }, 100);
+                }
+                // ----------------------------
 
                 // RESTORE CORRECT UI TEXT
                 const item = state.currentDataNode[state.currentSector];
@@ -532,11 +561,18 @@ async function handleSelection() {
     const currentFacingItem = state.currentDataNode[state.currentSector];
     if (!currentFacingItem) return;
 
+    // --- NEW: CHECK EVALUATION SUCCESS (Step 4B) ---
+    // Check if the item we just interacted with is the target
+    if (typeof checkSuccess === 'function') {
+        checkSuccess(currentFacingItem.name);
+    }
+    // -----------------------------------------------
+
     // SCENARIO 1: DRILL DOWN (Genres/Artists)
     if (currentFacingItem.children && currentFacingItem.children.length > 0) {
         stopSound(); 
         state.isManualPause = false; 
-        state.isLocked = false; // Reset lock
+        state.isLocked = false; 
         
         statusDiv.textContent = `Selected: ${currentFacingItem.name}`;
         statusDiv.style.color = "cyan";
@@ -555,29 +591,31 @@ async function handleSelection() {
             state.isLocked = true; // FREEZE COMPASS
             state.isManualPause = false;
             
+            // --- ALSO CHECK SUCCESS HERE ---
+            // Users might "Lock" the target to signal they found it
+            if (typeof checkSuccess === 'function') {
+                checkSuccess(currentFacingItem.name);
+            }
+            // -------------------------------
+
             statusDiv.textContent = `Locked: ${currentFacingItem.name}`;
             statusDiv.style.color = "#00FF00"; // Green
             playConfirmationSound();
-            // Note: We don't need to start/stop audio. It's already playing.
-            // Now it just won't change when you move.
             return;
         }
 
         // --- B. IF LOCKED -> TOGGLE PAUSE ---
-        
         if (state.isManualPause) {
-            // RESUME (Still Locked)
+            // RESUME
             state.isManualPause = false;
             playConfirmationSound();
-            
             setTimeout(() => {
-                // Since we are locked, currentSector is still the correct song
                 playSectorSound(state.currentSector, state.pauseOffset);
                 statusDiv.textContent = `Locked: ${currentFacingItem.name}`;
                 statusDiv.style.color = "#00FF00";
             }, 100);
         } else {
-            // PAUSE (Still Locked)
+            // PAUSE
             state.isManualPause = true;
             state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
             stopSound();
@@ -792,4 +830,74 @@ function randomizeData(node) {
         shuffleArray(node);
         node.forEach(child => randomizeData(child));
     }
+}
+
+// --- EVALUATION HARNESS ---
+
+// 1. Start a New Task
+function startEvaluationTask() {
+    // A. Pick a random target from the current data (Deep Dive)
+    // For this prototype, let's pick a random Artist from the shuffled library
+    // ensuring we are not picking the one we are currently facing if possible.
+    
+    const randomGenre = state.currentDataNode[Math.floor(Math.random() * state.currentDataNode.length)];
+    
+    // Safety check: ensure genre has children (Artists)
+    if (!randomGenre.children || randomGenre.children.length === 0) {
+        console.error("Data structure error: Genre has no artists");
+        return;
+    }
+
+    const randomArtist = randomGenre.children[Math.floor(Math.random() * randomGenre.children.length)];
+    
+    state.currentTarget = randomArtist.name;
+    state.isTaskActive = true;
+    state.taskStartTime = Date.now();
+    
+    // B. Update UI
+    document.getElementById('target-display').textContent = `Find: ${state.currentTarget}`;
+    document.getElementById('target-display').style.color = "cyan";
+    
+    // C. Start Visual Timer
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    state.timerInterval = setInterval(() => {
+        const elapsed = (Date.now() - state.taskStartTime) / 1000;
+        document.getElementById('timer-display').textContent = elapsed.toFixed(1) + "s";
+    }, 100);
+    
+    console.log(`Task Started: Find ${state.currentTarget} (in ${randomGenre.name})`);
+}
+
+// 2. Check for Success
+function checkSuccess(selectedItemName) {
+    if (!state.isTaskActive) return;
+
+    if (selectedItemName === state.currentTarget) {
+        // SUCCESS!
+        completeTask();
+    }
+}
+
+// 3. Task Complete
+function completeTask() {
+    state.isTaskActive = false;
+    clearInterval(state.timerInterval);
+    
+    const finalTime = (Date.now() - state.taskStartTime) / 1000;
+    
+    // UI Feedback
+    document.getElementById('target-display').textContent = "SUCCESS!";
+    document.getElementById('target-display').style.color = "#00FF00"; // Bright Green
+    document.getElementById('timer-display').textContent = `Final Time: ${finalTime}s`;
+    
+    // Vibrate to celebrate
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+    
+    // Play Confirmation Sound (if available)
+    playConfirmationSound();
+    
+    alert(`Target Found!\nTime: ${finalTime}s\n\nTake a screenshot now if needed, then click OK for next task.`);
+    
+    // Optional: Auto-start next task after a delay?
+    // For now, let's just reset or wait for manual restart
 }

@@ -871,62 +871,49 @@ function prepareNextTask() {
         return;
     }
 
-    // ============================================================
-    // NEW: SILENT RESET & RANDOMIZE
-    // ============================================================
-    // 1. Reset Navigation State to Top
+    // --- 2. RESET & RANDOMIZE DATA ---
+    // A. Reset Logic State
     state.navigationPath = [];
     state.navigationLevel = 0;
     state.currentSector = -1;
     state.isLocked = false;
     state.isManualPause = false;
 
-    // 2. Reset Data Source to Library Root
+    // B. Reset Data to Root
     if (typeof musicData !== 'undefined') {
         state.currentDataNode = musicData.children;
     } else if (typeof MUSIC_LIBRARY !== 'undefined') {
         state.currentDataNode = MUSIC_LIBRARY;
     }
 
-    // 3. Re-Shuffle the Library (Prevents memory cheating)
-    console.log("Reshuffling Data for next trial...");
-    randomizeData(state.currentDataNode);
-
-    // 4. Update Status Text (So it's correct when curtain lifts)
-    const statusDiv = document.getElementById('status');
-    if (statusDiv) {
-        statusDiv.textContent = state.experimentMode === 'ALWAYS_ON'
-            ? "Genres. Tap to Select."
-            : "Genres. Hold to Browse.";
-        statusDiv.style.color = "#fff";
+    // C. Shuffle the Root (Genres)
+    console.log("Reshuffling Data...");
+    if (state.currentDataNode && Array.isArray(state.currentDataNode)) {
+        // Fisher-Yates Shuffle
+        for (let i = state.currentDataNode.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [state.currentDataNode[i], state.currentDataNode[j]] =
+                [state.currentDataNode[j], state.currentDataNode[i]];
+        }
     }
-    // ============================================================
 
-
-    // --- 2. PICK THE TARGET ---
+    // --- 3. PICK THE TARGET ---
     let targetName = "Any Song";
+    let libraryRoot = state.currentDataNode;
 
-    let libraryRoot = state.currentDataNode; // Use our newly reset root
-
-    // B. PERFORM SELECTION ON GLOBAL ROOT
     if (!libraryRoot || !Array.isArray(libraryRoot)) {
         targetName = "Error: Data Missing";
     } else {
         try {
-            // MODE A: FIND RANDOM ARTIST
             if (state.taskMode === 'ARTIST') {
                 const randomGenre = libraryRoot[Math.floor(Math.random() * libraryRoot.length)];
-                if (randomGenre && randomGenre.children && randomGenre.children.length > 0) {
+                if (randomGenre && randomGenre.children) {
                     const randomArtist = randomGenre.children[Math.floor(Math.random() * randomGenre.children.length)];
                     targetName = randomArtist.name;
-                } else {
-                    targetName = "Retry Task";
                 }
             }
-            // MODE B: FIND SPECIFIC TRACK (MJ / DAFT PUNK)
             else if (state.taskMode === 'TRACK_MJ_DP') {
                 const potentialArtists = [];
-
                 libraryRoot.forEach(genre => {
                     if (genre.children) {
                         genre.children.forEach(artist => {
@@ -937,32 +924,24 @@ function prepareNextTask() {
                         });
                     }
                 });
-
                 if (potentialArtists.length > 0) {
                     const chosenArtist = potentialArtists[Math.floor(Math.random() * potentialArtists.length)];
-                    if (chosenArtist.children && chosenArtist.children.length > 0) {
-                        const chosenTrack = chosenArtist.children[Math.floor(Math.random() * chosenArtist.children.length)];
-                        targetName = chosenTrack.name;
-                    } else {
-                        targetName = chosenArtist.name;
-                    }
+                    const chosenTrack = chosenArtist.children[Math.floor(Math.random() * chosenArtist.children.length)];
+                    targetName = chosenTrack ? chosenTrack.name : chosenArtist.name;
                 } else {
-                    targetName = "Michael Jackson";
+                    targetName = "Michael Jackson (Fallback)";
                 }
             }
         } catch (err) {
-            console.error("Error picking target:", err);
-            targetName = "Error: Retry";
+            console.error("Target Error:", err);
+            targetName = "Retry Task";
         }
     }
 
-    // --- 3. FINAL VALIDATION ---
-    if (!targetName || targetName === "null") targetName = "Target: Any Artist";
-
+    if (!targetName) targetName = "Target: Any";
     state.currentTarget = targetName;
-    console.log("Target Selected:", targetName);
 
-    // --- 4. SHOW MODAL & LOCK SYSTEM ---
+    // --- 4. SHOW MODAL ---
     const modal = document.getElementById('task-modal');
     const modalText = document.getElementById('modal-target-text');
     const goBtn = document.getElementById('btn-start-task');
@@ -974,6 +953,7 @@ function prepareNextTask() {
         modalText.textContent = `Find: ${targetName}`;
         modal.style.display = 'block';
 
+        // --- 5. THE "GO" HANDLER (WITH FIX) ---
         const handleGo = (e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -981,9 +961,37 @@ function prepareNextTask() {
             state.isModalOpen = false;
             modal.style.display = 'none';
 
+            // A. Resume Audio Context
             if (state.audioContext && state.audioContext.state === 'suspended') {
                 state.audioContext.resume();
             }
+
+            // ========================================================
+            // THE FIX: FORCE AUDIO ENGINE TO SYNC
+            // We call enterLevel to force the audio engine to load 
+            // the new randomized root data.
+            // ========================================================
+            if (typeof enterLevel === 'function') {
+                console.log("Forcing Audio Sync for New Task...");
+
+                // 1. Force Entry (updates audio buffers)
+                enterLevel(state.currentDataNode, "Genres");
+
+                // 2. Patch Navigation Stack (Fix the side-effect)
+                // enterLevel usually adds to history, but we are at Root (Level 0).
+                // So we manually reset the stack to keep it clean.
+                state.navigationPath = [];
+                state.navigationLevel = 0;
+
+                // 3. Update Status Text
+                const statusDiv = document.getElementById('status');
+                if (statusDiv) {
+                    statusDiv.textContent = state.experimentMode === 'ALWAYS_ON'
+                        ? "Genres. Tap to Select."
+                        : "Genres. Hold to Browse.";
+                }
+            }
+            // ========================================================
 
             if (typeof startTaskTimer === 'function') startTaskTimer();
         };
@@ -992,9 +1000,6 @@ function prepareNextTask() {
         goBtn.parentNode.replaceChild(newBtn, goBtn);
         newBtn.addEventListener('touchstart', handleGo, { passive: false });
         newBtn.addEventListener('click', handleGo);
-
-    } else {
-        console.error("Modal elements missing");
     }
 }
 

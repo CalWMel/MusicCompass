@@ -24,23 +24,31 @@
 
 ### BLOCK A: Mode = ______________________
 
-*(Set App to match Mode. Ensure 'Task' matches the row below).*
+*(Set App to match Mode. Start with `Task: ARTIST`)*.
 
-| # | Task Type | Target Goal | Time (sec) | Observations / Errors |
-|:--|:----------|:------------|:-----------|:----------------------|
-| **1** | **Artist Search**<br>*(Set: `Task: ARTIST`)* | *Read target on screen* | `_______` | |
-| **2** | **Track Search**<br>*(Set: `Task: TRACK_MJ_DP`)* | *Find specific song* | `_______` | |
-| **3** | **Track Search**<br>*(Set: `Task: TRACK_MJ_DP`)* | *Find specific song* | `_______` | |
+| # | Task Type | Time (sec) | Observations (Drift? Fatigue? Confusion?) |
+|:--|:----------|:-----------|:------------------------------------------|
+| 1 | Artist Search 1 | `_______` | |
+| 2 | Artist Search 2 | `_______` | |
+| 3 | Artist Search 3 | `_______` | |
+| 4 | Track Search 1  | `_______` | |
+| 5 | Track Search 2  | `_______` | |
+| 6 | Track Search 3  | `_______` | |
 
 *Break / Switch Mode (1 Minute)*
 
 ### BLOCK B: Mode = ______________________
 
-| # | Task Type | Target Goal | Time (sec) | Observations / Errors |
-|:--|:----------|:------------|:-----------|:----------------------|
-| **1** | **Artist Search**<br>*(Set: `Task: ARTIST`)* | *Read target on screen* | `_______` | |
-| **2** | **Track Search**<br>*(Set: `Task: TRACK_MJ_DP`)* | *Find specific song* | `_______` | |
-| **3** | **Track Search**<br>*(Set: `Task: TRACK_MJ_DP`)* | *Find specific song* | `_______` | |
+*(Set App to match Mode. Start with `Task: ARTIST`)*.
+
+| # | Task Type | Time (sec) | Observations (Drift? Fatigue? Confusion?) |
+|:--|:----------|:-----------|:------------------------------------------|
+| 1 | Artist Search 1 | `_______` | |
+| 2 | Artist Search 2 | `_______` | |
+| 3 | Artist Search 3 | `_______` | |
+| 4 | Track Search 1  | `_______` | |
+| 5 | Track Search 2  | `_______` | |
+| 6 | Track Search 3  | `_______` | |
 
 ---
 

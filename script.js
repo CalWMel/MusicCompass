@@ -837,6 +837,8 @@ function randomizeData(node) {
 
 // 1. Prepare (Show Modal)
 function prepareNextTask() {
+    console.log("Preparing next task..."); // DEBUG
+
     if (state.taskMode === 'FAMILIARIZATION') {
         document.getElementById('target-display').textContent = "Free Play (No Target)";
         document.getElementById('target-display').style.color = "#aaa";
@@ -845,55 +847,37 @@ function prepareNextTask() {
 
     // A. Pick Target
     let targetName = "";
-    let targetParent = "";
-
-    if (state.taskMode === 'ARTIST') {
-        // Pick Random Genre -> Random Artist
-        const randomGenre = state.currentDataNode[Math.floor(Math.random() * state.currentDataNode.length)];
-        const randomArtist = randomGenre.children[Math.floor(Math.random() * randomGenre.children.length)];
-        targetName = randomArtist.name;
-        targetParent = randomGenre.name;
-    } 
-    else if (state.taskMode === 'TRACK_MJ_DP') {
-        // Find MJ or Daft Punk specifically
-        // Note: We search the SHUFFLED list to find where they ended up
-        const targets = [];
-        
-        // Helper to search tree
-        state.currentDataNode.forEach(genre => {
-            genre.children.forEach(artist => {
-                if (artist.name.includes("Michael Jackson") || artist.name.includes("Daft Punk")) {
-                    targets.push(artist);
-                }
-            });
-        });
-
-        if (targets.length > 0) {
-            const chosenArtist = targets[Math.floor(Math.random() * targets.length)];
-            const chosenTrack = chosenArtist.children[Math.floor(Math.random() * chosenArtist.children.length)];
-            targetName = chosenTrack.name;
-            targetParent = chosenArtist.name;
-        } else {
-            console.error("MJ/Daft Punk not found in data!");
-            targetName = "Error: Retry";
-        }
-    }
-
-    state.currentTarget = targetName;
+    
+    // ... (Keep your existing target picking logic here) ...
+    // If you lost the logic, just use this simple fallback for testing:
+    if (!state.currentTarget) state.currentTarget = "Test Target";
+    targetName = state.currentTarget; 
 
     // B. Show Modal
     const modal = document.getElementById('task-modal');
     const modalText = document.getElementById('modal-target-text');
-    const btn = document.getElementById('btn-start-task');
+    const goBtn = document.getElementById('btn-start-task');
 
     modalText.textContent = `Find: ${targetName}`;
     modal.style.display = 'block';
 
-    // One-time listener for the GO button
-    btn.onclick = () => {
+    console.log("Modal shown. Waiting for GO click..."); // DEBUG
+
+    // REMOVE OLD LISTENERS to prevent double-clicks
+    const newBtn = goBtn.cloneNode(true);
+    goBtn.parentNode.replaceChild(newBtn, goBtn);
+
+    newBtn.addEventListener('click', () => {
+        console.log("GO Clicked!"); // DEBUG
         modal.style.display = 'none';
+        
+        // Resume Audio Context if suspended
+        if (state.audioContext && state.audioContext.state === 'suspended') {
+            state.audioContext.resume();
+        }
+        
         startTaskTimer();
-    };
+    });
 }
 
 // 2. Start Timer

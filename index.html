@@ -46,31 +46,38 @@
 
 <body>
 
-    <div id="setup-controls" style="text-align:center; padding: 20px;">
-        <h1>Music Compass</h1>
+    <div id="setup-controls"
+        style="text-align:center; padding: 40px; margin-top: 15vh; background: #222; border-radius: 15px; box-shadow: 0 0 20px black; max-width: 400px; margin-left: auto; margin-right: auto;">
+        <h1 style="margin-top:0;">Music Compass</h1>
     
-        <label>Navigation Mode:</label>
-        <select id="mode-select" style="margin: 10px; padding: 5px;">
-            <option value="CLUTCH">Clutch (Hold-to-Browse)</option>
-            <option value="ALWAYS_ON">Always-On (Tap-to-Lock)</option>
-        </select>
-        <br><br>
+        <div style="text-align: left; margin-bottom: 20px;">
+            <label>Navigation Mode:</label>
+            <select id="mode-select" style="width: 100%; padding: 10px; margin-top: 5px;">
+                <option value="CLUTCH">Clutch (Hold-to-Browse)</option>
+                <option value="ALWAYS_ON">Always-On (Tap-to-Lock)</option>
+            </select>
+        </div>
     
-        <label>Evaluation Task:</label>
-        <select id="task-select" style="margin: 10px; padding: 5px;">
-            <option value="FAMILIARIZATION">Familiarization (Free Play)</option>
-            <option value="ARTIST">Find Random Artists</option>
-            <option value="TRACK_MJ_DP">Find Tracks (MJ / Daft Punk)</option>
-        </select>
-        <br><br>
+        <div style="text-align: left; margin-bottom: 20px;">
+            <label>Evaluation Task:</label>
+            <select id="task-select" style="width: 100%; padding: 10px; margin-top: 5px;">
+                <option value="FAMILIARIZATION">Familiarization (Free Play)</option>
+                <option value="ARTIST">Find Random Artists</option>
+                <option value="TRACK_MJ_DP">Find Tracks (MJ / Daft Punk)</option>
+            </select>
+        </div>
     
-        <label>
-            <input type="checkbox" id="vision-toggle">
-            Simulate Eyes-Free (Blur Screen)
-        </label>
-        <br><br>
+        <div style="text-align: left; margin-bottom: 30px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="vision-toggle" style="width: 20px; height: 20px;">
+                <span style="font-size: 14px;">Simulate Eyes-Free (Blur Screen)</span>
+            </label>
+        </div>
     
-        <button id="btn-start" style="padding: 15px 30px; font-size: 18px;">Start Prototype</button>
+        <button id="btn-start"
+            style="width: 100%; padding: 15px; font-size: 18px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer;">
+            Start Prototype
+        </button>
     </div>
     
     <div id="task-modal"

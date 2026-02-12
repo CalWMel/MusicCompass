@@ -20,6 +20,7 @@
             text-align: center;
         }
 
+        /* Search Box */
         input {
             width: 100%;
             padding: 15px;
@@ -30,13 +31,13 @@
             background: #333;
             color: white;
             box-sizing: border-box;
-            /* Fixes padding issues */
         }
 
         input:focus {
             outline: 2px solid #00d2ff;
         }
 
+        /* List Items */
         .result-item {
             background: #222;
             padding: 15px;
@@ -46,15 +47,15 @@
             justify-content: space-between;
             align-items: center;
             border-left: 5px solid #444;
-            cursor: pointer;
             transition: background 0.2s;
         }
 
-        .result-item:hover {
-            background: #333;
+        .result-item.active {
+            background: #2a2a2a;
+            border-left-color: #00ff88;
         }
 
-        /* Different colors for types */
+        /* Color Coding */
         .type-genre {
             border-left-color: #ff9900;
         }
@@ -70,6 +71,7 @@
         .info {
             display: flex;
             flex-direction: column;
+            flex-grow: 1;
         }
 
         .name {
@@ -82,20 +84,52 @@
             color: #888;
         }
 
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+
         button {
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn-play {
             padding: 10px 20px;
             background: #444;
             color: white;
-            border: none;
-            border-radius: 50px;
-            cursor: pointer;
+            min-width: 80px;
         }
 
-        .playing button {
-            background: #ff4444;
+        .btn-stop {
+            padding: 10px 15px;
+            background: #333;
+            color: #ff4444;
+            display: none;
+            /* Hidden by default */
         }
 
-        /* Red stop button */
+        /* Active States */
+        .active .btn-play {
+            background: #00d2ff;
+            color: black;
+        }
+
+        .active .btn-stop {
+            display: block;
+        }
+
+        .paused .btn-play {
+            background: #ffaa00;
+            color: black;
+        }
+
+        /* Orange when paused */
     </style>
 </head>
 
@@ -111,12 +145,15 @@
     <script src="data.js"></script>
 
     <script>
-        // --- 1. DETECT & PARSE DATA ---
         let flatList = [];
-        let currentAudio = null;
+
+        // GLOBAL AUDIO STATE
+        let currentAudio = null;      // The actual Audio object
+        let currentPath = null;       // The file path string of the playing song
+        let activeDiv = null;         // The DOM element currently lit up
 
         window.onload = function () {
-            // Find the data variable (handles different naming conventions)
+            // Find data
             let rootData = null;
             if (typeof musicData !== 'undefined') rootData = musicData.children || musicData;
             else if (typeof MUSIC_LIBRARY !== 'undefined') rootData = MUSIC_LIBRARY;
@@ -126,43 +163,33 @@
                 return;
             }
 
-            // Flatten the hierarchy into a single searchable list
             flattenData(rootData, "Library");
-            renderResults(""); // Show all initially (or empty if preferred)
+            renderResults("");
         };
 
         function flattenData(nodes, parentName) {
             if (!Array.isArray(nodes)) return;
-
             nodes.forEach(item => {
-                // Add this item to the list
                 if (item.audio || item.src) {
                     flatList.push({
                         name: item.name,
-                        type: determineType(item, parentName), // Helper to guess Level
+                        type: determineType(item, parentName),
                         parent: parentName,
                         path: item.audio || item.src
                     });
                 }
-
-                // Recursively check children
-                if (item.children) {
-                    flattenData(item.children, item.name);
-                }
+                if (item.children) flattenData(item.children, item.name);
             });
         }
 
-        // Helper to guess if it's an Artist or Track based on depth/context
         function determineType(item, parent) {
-            // Simple heuristic: If it has children, it's likely a Genre or Artist.
-            // If it has no children, it's a Track.
             if (item.children && item.children.length > 0) {
                 return (parent === "Library") ? "genre" : "artist";
             }
             return "track";
         }
 
-        // --- 2. SEARCH & RENDER ---
+        // --- RENDER UI ---
         const searchBox = document.getElementById('search-box');
         const container = document.getElementById('results-container');
 
@@ -172,14 +199,10 @@
 
         function renderResults(query) {
             container.innerHTML = "";
-
-            // Filter
             const matches = flatList.filter(item =>
                 item.name.toLowerCase().includes(query) ||
                 item.parent.toLowerCase().includes(query)
             );
-
-            // Limit to top 20 to prevent lag if empty query
             const displaySet = matches.slice(0, 50);
 
             if (displaySet.length === 0) {
@@ -190,44 +213,100 @@
             displaySet.forEach(item => {
                 const div = document.createElement('div');
                 div.className = `result-item type-${item.type}`;
+
+                // Check if this item is currently playing (to keep state on redraw)
+                if (currentPath === item.path) {
+                    div.classList.add('active');
+                    if (currentAudio && currentAudio.paused) div.classList.add('paused');
+                    activeDiv = div; // Update reference
+                }
+
+                const playText = (currentPath === item.path && currentAudio && !currentAudio.paused) ? "Pause" : "Play";
+
                 div.innerHTML = `
                     <div class="info">
                         <span class="name">${item.name}</span>
                         <span class="meta">${item.type.toUpperCase()} • inside "${item.parent}"</span>
                     </div>
-                    <button>Play</button>
+                    <div class="controls">
+                        <button class="btn-play">${playText}</button>
+                        <button class="btn-stop">⏹</button>
+                    </div>
                 `;
 
-                div.onclick = () => playPreview(item.path, div);
+                // Add Listeners
+                const playBtn = div.querySelector('.btn-play');
+                const stopBtn = div.querySelector('.btn-stop');
+
+                playBtn.onclick = () => handlePlayClick(item.path, div, playBtn);
+                stopBtn.onclick = () => handleStopClick(div, playBtn);
+
                 container.appendChild(div);
             });
         }
 
-        // --- 3. AUDIO ENGINE ---
-        function playPreview(path, divElement) {
-            // Stop previous
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-                // Reset UI of previous
-                document.querySelectorAll('.result-item').forEach(el => el.classList.remove('playing'));
+        // --- AUDIO LOGIC ---
+
+        function handlePlayClick(path, div, btn) {
+            // Case 1: Clicking the SAME song
+            if (currentPath === path && currentAudio) {
+                if (currentAudio.paused) {
+                    // Resume
+                    currentAudio.play();
+                    div.classList.remove('paused');
+                    div.classList.add('active');
+                    btn.textContent = "Pause";
+                } else {
+                    // Pause
+                    currentAudio.pause();
+                    div.classList.add('paused');
+                    btn.textContent = "Play";
+                }
+                return;
             }
 
-            // Play new
-            const audio = new Audio(path);
-            currentAudio = audio;
+            // Case 2: Clicking a NEW song
+            stopAll(); // Reset everything first
 
-            audio.play().catch(e => alert("File not found: " + path));
+            // Start new
+            currentAudio = new Audio(path);
+            currentPath = path;
+            activeDiv = div;
 
-            divElement.classList.add('playing');
-            divElement.querySelector('button').textContent = "Stop";
+            currentAudio.play().catch(e => alert("File not found"));
 
-            // Reset when done
-            audio.onended = () => {
-                divElement.classList.remove('playing');
-                divElement.querySelector('button').textContent = "Play";
-            };
+            // UI Updates
+            div.classList.add('active');
+            div.classList.remove('paused');
+            btn.textContent = "Pause";
+
+            // Cleanup when song finishes naturally
+            currentAudio.onended = () => stopAll();
         }
+
+        function handleStopClick(div, playBtn) {
+            stopAll();
+        }
+
+        // Helper to reset state completely
+        function stopAll() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0; // Rewind
+            }
+
+            // Reset Variables
+            currentAudio = null;
+            currentPath = null;
+
+            // Reset UI (All buttons turn back to Play)
+            document.querySelectorAll('.result-item').forEach(el => {
+                el.classList.remove('active', 'paused');
+                const btn = el.querySelector('.btn-play');
+                if (btn) btn.textContent = "Play";
+            });
+        }
+
     </script>
 </body>
 

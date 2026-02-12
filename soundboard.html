@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Compass - Researcher Soundboard</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: white;
+            font-family: sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #00d2ff;
+            text-align: center;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            border: none;
+            background: #333;
+            color: white;
+            box-sizing: border-box;
+            /* Fixes padding issues */
+        }
+
+        input:focus {
+            outline: 2px solid #00d2ff;
+        }
+
+        .result-item {
+            background: #222;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 5px solid #444;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .result-item:hover {
+            background: #333;
+        }
+
+        /* Different colors for types */
+        .type-genre {
+            border-left-color: #ff9900;
+        }
+
+        .type-artist {
+            border-left-color: #00d2ff;
+        }
+
+        .type-track {
+            border-left-color: #00ff88;
+        }
+
+        .info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .name {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .meta {
+            font-size: 12px;
+            color: #888;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #444;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+        }
+
+        .playing button {
+            background: #ff4444;
+        }
+
+        /* Red stop button */
+    </style>
+</head>
+
+<body>
+
+    <h1>Researcher Soundboard</h1>
+    <p style="text-align:center; color:#888;">Type to find any sound in the database</p>
+
+    <input type="text" id="search-box" placeholder="Search for Artist or Track..." autofocus>
+
+    <div id="results-container"></div>
+
+    <script src="data.js"></script>
+
+    <script>
+        // --- 1. DETECT & PARSE DATA ---
+        let flatList = [];
+        let currentAudio = null;
+
+        window.onload = function () {
+            // Find the data variable (handles different naming conventions)
+            let rootData = null;
+            if (typeof musicData !== 'undefined') rootData = musicData.children || musicData;
+            else if (typeof MUSIC_LIBRARY !== 'undefined') rootData = MUSIC_LIBRARY;
+
+            if (!rootData) {
+                alert("Error: data.js not found or variable names don't match.");
+                return;
+            }
+
+            // Flatten the hierarchy into a single searchable list
+            flattenData(rootData, "Library");
+            renderResults(""); // Show all initially (or empty if preferred)
+        };
+
+        function flattenData(nodes, parentName) {
+            if (!Array.isArray(nodes)) return;
+
+            nodes.forEach(item => {
+                // Add this item to the list
+                if (item.audio || item.src) {
+                    flatList.push({
+                        name: item.name,
+                        type: determineType(item, parentName), // Helper to guess Level
+                        parent: parentName,
+                        path: item.audio || item.src
+                    });
+                }
+
+                // Recursively check children
+                if (item.children) {
+                    flattenData(item.children, item.name);
+                }
+            });
+        }
+
+        // Helper to guess if it's an Artist or Track based on depth/context
+        function determineType(item, parent) {
+            // Simple heuristic: If it has children, it's likely a Genre or Artist.
+            // If it has no children, it's a Track.
+            if (item.children && item.children.length > 0) {
+                return (parent === "Library") ? "genre" : "artist";
+            }
+            return "track";
+        }
+
+        // --- 2. SEARCH & RENDER ---
+        const searchBox = document.getElementById('search-box');
+        const container = document.getElementById('results-container');
+
+        searchBox.addEventListener('input', (e) => {
+            renderResults(e.target.value.toLowerCase());
+        });
+
+        function renderResults(query) {
+            container.innerHTML = "";
+
+            // Filter
+            const matches = flatList.filter(item =>
+                item.name.toLowerCase().includes(query) ||
+                item.parent.toLowerCase().includes(query)
+            );
+
+            // Limit to top 20 to prevent lag if empty query
+            const displaySet = matches.slice(0, 50);
+
+            if (displaySet.length === 0) {
+                container.innerHTML = "<div style='text-align:center; color:#555'>No matches found</div>";
+                return;
+            }
+
+            displaySet.forEach(item => {
+                const div = document.createElement('div');
+                div.className = `result-item type-${item.type}`;
+                div.innerHTML = `
+                    <div class="info">
+                        <span class="name">${item.name}</span>
+                        <span class="meta">${item.type.toUpperCase()} • inside "${item.parent}"</span>
+                    </div>
+                    <button>Play</button>
+                `;
+
+                div.onclick = () => playPreview(item.path, div);
+                container.appendChild(div);
+            });
+        }
+
+        // --- 3. AUDIO ENGINE ---
+        function playPreview(path, divElement) {
+            // Stop previous
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                // Reset UI of previous
+                document.querySelectorAll('.result-item').forEach(el => el.classList.remove('playing'));
+            }
+
+            // Play new
+            const audio = new Audio(path);
+            currentAudio = audio;
+
+            audio.play().catch(e => alert("File not found: " + path));
+
+            divElement.classList.add('playing');
+            divElement.querySelector('button').textContent = "Stop";
+
+            // Reset when done
+            audio.onended = () => {
+                divElement.classList.remove('playing');
+                divElement.querySelector('button').textContent = "Play";
+            };
+        }
+    </script>
+</body>
+
+</html>

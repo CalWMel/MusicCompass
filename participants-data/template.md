@@ -83,6 +83,13 @@
 * [ ] No (Hard to trigger)
 * [ ] No (Triggered accidentally)
 
-**6. Final Verdict: If using this while walking to the bus, which mode would you choose?**
+**6. The Learning Curve:**
+> "You performed the tasks 3 times. By the third attempt, did the gestures (spinning/locking/shaking) start to feel automatic and natural, or did you still have to think carefully about every movement?"
+* [ ] Automatic / Muscle Memory (I mastered the controls)
+* [ ] Effortful / Calculated (I was still fighting the controls)
+* *Comments:* ___________________________________________________________
+
+**7. Final Verdict: If using this while walking to the bus, which mode would you choose?**
 * [ ] **Clutch**
 * [ ] **Always-On**
+* *Why?* __________________________________________________________________

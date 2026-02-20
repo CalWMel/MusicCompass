@@ -83,6 +83,7 @@ const state = {
     // Evaluation Runtime
     currentTarget: null,
     taskStartTime: 0,
+    taskTotalShakes: 0,
     isTaskActive: false,
     timerInterval: null
 };
@@ -113,7 +114,7 @@ startBtn.addEventListener('click', async () => {
     // 3. APPLY SCREEN BLUR IF REQUESTED
     const ui = document.getElementById('ui-container');
     if (state.obscureScreen && ui) {
-        ui.style.filter = "blur(8px)";
+        ui.style.filter = "blur(20px)";
         ui.style.opacity = "0.6";
     }
 
@@ -756,6 +757,9 @@ function handleShake(event) {
 
     // 4. TRIGGER ACTION
     if (shakeCount >= 3) {
+        if (state.isTaskActive) {
+            state.taskTotalShakes++;
+        }
 
         // NEW: Check if we are locked first
         if (state.isLocked) {
@@ -966,7 +970,7 @@ function prepareNextTask() {
                 state.audioContext.resume();
             }
 
-    
+
             if (typeof enterLevel === 'function') {
                 console.log("Forcing Audio Sync for New Task...");
 
@@ -1003,6 +1007,7 @@ function prepareNextTask() {
 function startTaskTimer() {
     state.isTaskActive = true;
     state.taskStartTime = Date.now();
+    state.taskTotalShakes = 0;
 
     // Update HUD
     document.getElementById('target-display').textContent = `Find: ${state.currentTarget}`;
@@ -1044,7 +1049,7 @@ function completeTask() {
 
     // Allow user to relax before next task
     setTimeout(() => {
-        alert(`Target Found!\nTime: ${finalTime}s\n\nClick OK to set up the next task.`);
+        alert(`Target Found!\nTime: ${finalTime}s\nShakes used: ${state.taskTotalShakes}\n\nClick OK to set up the next task.`);
         prepareNextTask();
     }, 500);
 }

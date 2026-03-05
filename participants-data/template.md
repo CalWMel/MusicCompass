@@ -26,7 +26,7 @@
 
 *(Set App to match Mode. Start with `Task: ARTIST`)*.
 
-| # | Task Type | Time (sec) | Observations (Drift? Fatigue? Confusion?) |
+| # | Task Type | Time (sec) | Errors/Backtracks |
 |:--|:----------|:-----------|:------------------------------------------|
 | 1 | Artist Search 1 | `_______` | |
 | 2 | Artist Search 2 | `_______` | |
@@ -41,7 +41,7 @@
 
 *(Set App to match Mode. Start with `Task: ARTIST`)*.
 
-| # | Task Type | Time (sec) | Observations (Drift? Fatigue? Confusion?) |
+| # | Task Type | Time (sec) | Errors/Backtracks |
 |:--|:----------|:-----------|:------------------------------------------|
 | 1 | Artist Search 1 | `_______` | |
 | 2 | Artist Search 2 | `_______` | |

@@ -20,9 +20,9 @@ const MUSIC_LIBRARY = [
             { name: "Taylor Swift", audio: "assets/taylor-swift.mp3" },
 
             // TARGET 1: MICHAEL JACKSON (Has Tracks)
-            { 
-                name: "Michael Jackson", 
-                audio: "assets/michael-jackson.mp3", 
+            {
+                name: "Michael Jackson",
+                audio: "assets/michael-jackson.mp3",
                 children: [
                     { name: "Billie Jean", audio: "assets/billie-jean.mp3" },
                     { name: "Thriller", audio: "assets/thriller.mp3" },
@@ -32,7 +32,7 @@ const MUSIC_LIBRARY = [
                     { name: "Man in the Mirror", audio: "assets/man-in-the-mirror.mp3" },
                     { name: "Black or White", audio: "assets/black-or-white.mp3" },
                     { name: "The Way You Make Me Feel", audio: "assets/the-way-you-make-me-feel.mp3" }
-                ] 
+                ]
             },
             { name: "Madonna", audio: "assets/madonna.mp3" },
             { name: "Beyonce", audio: "assets/beyonce.mp3" },
@@ -107,10 +107,11 @@ const MUSIC_LIBRARY = [
             { name: "Deadmau5", audio: "assets/deadmau5.mp3" },
             { name: "David Guetta", audio: "assets/david-guetta.mp3" },
             { name: "Marshmello", audio: "assets/marshmello.mp3" },
+
             // TARGET 2: DAFT PUNK (Has Tracks)
-            { 
-                name: "Daft Punk", 
-                audio: "assets/daft-punk.mp3", 
+            {
+                name: "Daft Punk",
+                audio: "assets/daft-punk.mp3",
                 children: [
                     { name: "Get Lucky", audio: "assets/get-lucky.mp3" },
                     { name: "Harder Better Faster", audio: "assets/harder-better-faster.mp3" },
@@ -120,7 +121,7 @@ const MUSIC_LIBRARY = [
                     { name: "Instant Crush", audio: "assets/instant-crush.mp3" },
                     { name: "Lose Yourself to Dance", audio: "assets/lose-yourself-to-dance.mp3" },
                     { name: "Robot Rock", audio: "assets/robot-rock.mp3" }
-                ] 
+                ]
             },
             { name: "Tiesto", audio: "assets/tiesto.mp3" },
             { name: "Avicii", audio: "assets/avicii.mp3" }

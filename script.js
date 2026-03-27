@@ -147,6 +147,7 @@ startBtn.addEventListener('click', async () => {
 });
 
 function initApp() {
+
     // --- UI SETUP ---
     startBtn.style.display = 'none';
     uiContainer.style.display = 'block';
@@ -210,6 +211,7 @@ function initApp() {
                 if (navigator.vibrate) navigator.vibrate(50);
 
             } else {
+
                 // === RESUME BROWSING ===
                 newBtn.textContent = "Stop Browsing";
                 newBtn.style.backgroundColor = "#ff4444"; // Red
@@ -424,6 +426,7 @@ function handleOrientation(event) {
 
     // --- NEW: Calibration Logic ---
     if (!state.hasCalibrated) {
+
         // In Always-On, calibrate immediately. 
         if (state.experimentMode === 'ALWAYS_ON') {
             state.calibratedOffset = angle;
@@ -478,6 +481,7 @@ function calculateSector(angle) {
 }
 
 function setSector(newSector) {
+
     // 1. If Locked, ignore compass changes
     if (state.isLocked) return;
 
@@ -549,6 +553,7 @@ function engageClutch(e) {
 }
 
 function disengageClutch(e) {
+
     // --- BRANCH 1: ALWAYS-ON MODE ---
     if (state.experimentMode === 'ALWAYS_ON') {
         return;
@@ -588,7 +593,6 @@ async function handleSelection() {
     if (typeof checkSuccess === 'function') {
         checkSuccess(currentFacingItem.name);
     }
-    // -----------------------------------------------
 
     // SCENARIO 1: DRILL DOWN (Genres/Artists)
     if (currentFacingItem.children && currentFacingItem.children.length > 0) {
@@ -618,7 +622,6 @@ async function handleSelection() {
             if (typeof checkSuccess === 'function') {
                 checkSuccess(currentFacingItem.name);
             }
-            // -------------------------------
 
             statusDiv.textContent = `Locked: ${currentFacingItem.name}`;
             statusDiv.style.color = "#00FF00"; // Green
@@ -637,6 +640,7 @@ async function handleSelection() {
                 statusDiv.style.color = "#00FF00";
             }, 100);
         } else {
+
             // PAUSE
             state.isManualPause = true;
             state.pauseOffset = state.audioContext.currentTime - state.playbackStartTime;
@@ -777,6 +781,7 @@ function handleShake(event) {
                 stopSound();
                 statusDiv.textContent = "Unlocked. Hold to Browse.";
             }
+
             // --- CRITICAL FIX END ---
 
             statusDiv.style.color = "#fff";
@@ -844,6 +849,7 @@ function shuffleArray(array) {
 }
 
 function randomizeData(node) {
+
     // Safety check: if node is null/undefined, do nothing
     if (!node) return;
 
@@ -991,7 +997,6 @@ function prepareNextTask() {
                         : "Genres. Hold to Browse.";
                 }
             }
-            // ========================================================
 
             if (typeof startTaskTimer === 'function') startTaskTimer();
         };

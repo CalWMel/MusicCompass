@@ -14,18 +14,12 @@ This codebase contains the functional prototype utilized for the $N=12$ formal u
 
 The application relies heavily on mobile hardware sensors (gyroscope and accelerometer). **It must be run on a mobile device to function correctly.**
 
-### Option 1: Live Deployment (Recommended)
+### Live Deployment
 The most reliable method to test the prototype is via the live GitHub Pages deployment.
 1. On your smartphone, navigate to: **https://calwmel.github.io/MusicCompass/**
 2. *Note: The system has been optimized and formally evaluated using Mozilla Firefox on Android (Google Pixel 7 Pro), but modern Chrome or Safari mobile browsers are also supported.*
 3. Tap the screen to initialize the Audio Context.
 4. **Important:** When prompted by the browser, you must grant permission for the site to access your device's motion and orientation sensors.
-
-### Option 2: Local Execution from Source Code
-Because the application is built using native Web APIs (HTML5, CSS, vanilla JavaScript), it does not require complex local server environments or compiler toolchains.
-1. Extract this `.zip` archive to your local machine.
-2. Transfer the folder to a mobile device (or use a local server tool like VS Code Live Server accessible via your local network).
-3. Open `index.html` in a mobile web browser.
 
 ---
 

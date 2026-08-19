@@ -1,21 +1,21 @@
 // --- MOBILE DEBUGGING CONSOLE ---
 (function () {
-    var debugDiv = document.createElement('div');
+    let debugDiv = document.createElement('div');
     debugDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:150px; background:rgba(0,0,0,0.8); color:#0f0; font-family:monospace; font-size:12px; overflow-y:scroll; z-index:9999; pointer-events:none; padding:5px;';
     document.body.appendChild(debugDiv);
 
     function logToScreen(message, color) {
-        var line = document.createElement('div');
+        let line = document.createElement('div');
         line.style.color = color || '#0f0';
         line.textContent = "> " + message;
         debugDiv.appendChild(line);
         debugDiv.scrollTop = debugDiv.scrollHeight;
     }
 
-    var oldLog = console.log;
+    let oldLog = console.log;
     console.log = function (msg) { logToScreen(msg); oldLog.apply(console, arguments); };
 
-    var oldError = console.error;
+    let oldError = console.error;
     console.error = function (msg) { logToScreen(msg, '#ff4444'); oldError.apply(console, arguments); };
 })();
 
